@@ -2,6 +2,8 @@ import { Client, GatewayIntentBits, Events, SlashCommandBuilder, ActionRowBuilde
 import { authorizeDiscord, isId } from './policy.mjs';
 import { MAX_DIAGNOSTIC_BYTES } from '../src/services/diagnosticService.js';
 import { discordCard } from './discordCards.mjs';
+import { readFile, writeFile, rename } from 'node:fs/promises';
+import path from 'node:path';
 
 export async function startDiscord(controller, config, token) {
   if (!token || !config.guildId || !config.channelId || !config.ownerId) return null;
@@ -9,21 +11,51 @@ export async function startDiscord(controller, config, token) {
   const client = new Client({ intents: [GatewayIntentBits.Guilds] });
   const status = { connected: false, error: '' };
   const messageIds = new Map();
+  const notificationFile = path.join(controller.directory, `discord-messages-${config.channelId}.json`);
+  try {
+    for (const [id, message] of Object.entries(JSON.parse(await readFile(notificationFile, 'utf8')))) {
+      if (isId(id) && /^\d{17,22}$/.test(message)) messageIds.set(id, message);
+    }
+  } catch { /* First start, or a corrupt notification cache. Reports remain intact. */ }
+  const publishing = new Map(); let notificationSave = Promise.resolve();
   let channel;
-  const publish = async record => {
+  const publishOne = async record => {
     if (!channel) return;
     try {
       const card = discordCard(record);
       const existing = messageIds.get(record.id);
-      if (existing) await channel.messages.edit(existing, card);
-      else { const message = await channel.send(card); messageIds.set(record.id, message.id); }
+      let message;
+      if (existing) {
+        try { message = await channel.messages.edit(existing, card); }
+        catch (error) { if (error.code !== 10008) throw error; }
+      }
+      if (!message) { message = await channel.send(card); messageIds.set(record.id, message.id); }
+      status.lastReceiptId = record.id;
+      const snapshot = JSON.stringify(Object.fromEntries(messageIds));
+      notificationSave = notificationSave.catch(() => {}).then(async () => {
+        await writeFile(`${notificationFile}.tmp`, snapshot, { mode: 0o600 }); await rename(`${notificationFile}.tmp`, notificationFile);
+      });
+      await notificationSave;
     } catch { status.error = '디스코드 카드 전송 실패: 채널 권한·연결을 확인해주세요.'; }
+  };
+  const publish = record => {
+    const task = (publishing.get(record.id) || Promise.resolve()).then(() => publishOne(record));
+    publishing.set(record.id, task);
+    return task;
   };
   client.on(Events.Error, () => { status.error = '디스코드 연결 오류'; });
   client.once(Events.ClientReady, async () => {
     try {
       channel = await client.channels.fetch(config.channelId);
       if (channel?.guildId !== config.guildId || !channel.isSendable()) throw new Error('채널 설정 오류');
+      // Recover cards created before persistent message IDs were introduced.
+      if (!messageIds.size && controller.list().length) {
+        const recent = await channel.messages.fetch({ limit: 100 });
+        for (const message of recent.values()) {
+          const id = message.content.match(/리포트: `([a-f0-9-]+)`/)?.[1];
+          if (message.author.id === client.user.id && isId(id)) messageIds.set(id, message.id);
+        }
+      }
       const command = new SlashCommandBuilder().setName('dolphin-report').setDescription('돌핀데이터 진단 리포트를 관리자에게 전달합니다')
         .addAttachmentOption(o => o.setName('file').setDescription('앱에서 내보낸 진단 JSON').setRequired(true));
       await client.application.commands.create(command, config.guildId);

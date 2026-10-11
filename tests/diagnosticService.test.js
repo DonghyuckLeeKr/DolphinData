@@ -39,8 +39,23 @@ test('recording is opt-in, bounded, and a stopped recording is immutable', () =>
   const recorder = createDiagnosticRecorder({ id: () => '12345678-1234-1234-1234-123456789abc' });
   recorder.observe(rawIdentity); assert.equal(recorder.status().available, false);
   recorder.start({ profiles: [DEFAULT_PROFILE], activeProfileId: DEFAULT_PROFILE.id });
-  for (let i = 0; i < MAX_DIAGNOSTIC_EVENTS + 20; i++) recorder.observe(rawIdentity);
-  assert.equal(recorder.status().eventCount, MAX_DIAGNOSTIC_EVENTS); assert.equal(recorder.status().recording, false); assert.equal(recorder.status().truncated, true);
+  for (let i = 0; i < MAX_DIAGNOSTIC_EVENTS + 20; i++) recorder.observe({ ...rawIdentity, connected: i % 2 === 0 });
+  assert.equal(recorder.status().eventCount, MAX_DIAGNOSTIC_EVENTS); assert.equal(recorder.status().recording, true); assert.equal(recorder.status().truncated, true);
+  recorder.observe({ ...rawIdentity, networkName: '네트워크 77' });
+  assert.equal(recorder.export().events.at(-1).identity.networkName, 'network 2');
+  recorder.stop(); const stopped = recorder.export(); recorder.observe(rawIdentity); recorder.error();
+  assert.deepEqual(recorder.export(), stopped); assert.equal(recorder.status().recording, false);
+});
+test('hours of identical polling preserve confirmation samples and later reconnect evidence', () => {
+  let clock = 0;
+  const recorder = createDiagnosticRecorder({ now: () => clock });
+  recorder.start({ profiles: [DEFAULT_PROFILE], activeProfileId: DEFAULT_PROFILE.id });
+  for (let i = 0; i < 3000; i++) { clock += 5000; recorder.observe(rawIdentity); }
+  assert.equal(recorder.status().recording, true); assert.equal(recorder.status().eventCount, 2);
+  assert.equal(recorder.status().truncated, false);
+  recorder.observe({ connected: false }); recorder.observe(rawIdentity); recorder.observe(rawIdentity);
+  assert.equal(recorder.export().events.length, 5);
+  recorder.stop(); clock += 9000; assert.equal(recorder.status().elapsedSeconds, 15000);
 });
 test('import rejects unsupported fields, prototype keys, oversized files and identifiers', () => {
   for (const mutate of [r => { r.rawMac = '00:11:22:33:44:55'; }, r => { r.events[1].identity.gatewayIp = '192.168.0.1'; },

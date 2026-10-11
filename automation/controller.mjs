@@ -11,6 +11,7 @@ export class AutomationController extends EventEmitter {
   constructor({ directory, repositoryRoot, execute = run, codex = 'codex' }) {
     super(); this.directory = directory; this.repositoryRoot = repositoryRoot; this.execute = execute; this.codex = codex;
     this.records = new Map(); this.busy = false; this.emittedVersions = new Map(); this.readinessCache = null; this.saveChains = new Map();
+    this.importChain = Promise.resolve();
   }
   async init() {
     await mkdir(this.directory, { recursive: true });
@@ -38,10 +39,19 @@ export class AutomationController extends EventEmitter {
     this.saveChains.set(record.id, save); await save;
   }
   async importReport(raw) {
-    if (this.records.size >= 200) throw new Error('보관 한도 200개에 도달했습니다. 저장 폴더의 오래된 리포트를 정리해주세요.');
     const report = parseDiagnosticReport(raw);
-    const record = { id: randomUUID(), report, replay: replayDiagnosticReport(report), status: 'received', createdAt: new Date().toISOString(), audit: [] };
-    record.audit.push({ at: record.createdAt, action: 'import' }); await this.save(record); return this.view(record);
+    const imported = this.importChain.catch(() => {}).then(async () => {
+      const existing = [...this.records.values()].find(r => r.report.reportId === report.reportId);
+      if (existing) {
+        if (digest(JSON.stringify(existing.report)) !== digest(JSON.stringify(report))) throw new Error('이미 접수한 기록입니다. 새 기록을 시작해주세요.');
+        return this.view(existing);
+      }
+      if (this.records.size >= 200) throw new Error('보관 한도 200개에 도달했습니다. 저장 폴더의 오래된 리포트를 정리해주세요.');
+      const record = { id: randomUUID(), report, replay: replayDiagnosticReport(report), status: 'received', createdAt: new Date().toISOString(), audit: [] };
+      record.audit.push({ at: record.createdAt, action: 'import' }); await this.save(record); return this.view(record);
+    });
+    this.importChain = imported;
+    return imported;
   }
   gh(args, options = {}) { return this.execute('gh', args, { cwd: this.repositoryRoot, ...options }); }
   api(endpoint, fields, method = 'POST') {

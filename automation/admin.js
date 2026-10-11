@@ -15,13 +15,14 @@ function renderStatus(status) {
   const target = document.querySelector('#connections'); target.replaceChildren();
   for (const [label, good, text] of [['자동 수정', status.codex, status.codex ? 'Codex 로그인 확인' : 'Codex 로그인 필요'],
     ['GitHub 검사·배포', status.previewWorkflow && status.releaseApproval, status.previewWorkflow && status.releaseApproval ? '검사 작업·승인자 설정 확인' : 'main 반영·승인자 설정 필요'],
-    ['디스코드', status.discord.connected, status.discord.connected ? '봇 연결됨' : status.discord.error || '연결 설정 대기']]) {
+    ['디스코드', status.discord.connected, status.discord.connected ? '봇 연결됨' : status.discord.error || '연결 설정 대기'],
+    ['외부 앱 접수', status.publicIntake?.connected, status.publicIntake?.connected ? '무료 인터넷 접수 연결됨' : status.publicIntake?.error || '연결 설정 대기']]) {
     const card = element('div', '', 'connection'); card.append(element('span', label), element('strong', text, good ? 'good' : 'pending')); target.append(card);
   }
 }
 function renderReports(records) {
   const target = document.querySelector('#reports'); target.replaceChildren();
-  if (!records.length) { target.append(element('div', '아직 받은 리포트가 없습니다. 진단 파일을 가져오면 여기에서 확인할 수 있습니다.', 'empty')); return; }
+  if (!records.length) { target.append(element('div', '아직 받은 리포트가 없습니다. 앱에서 문제 접수를 누르면 여기에 나타납니다.', 'empty')); return; }
   for (const r of records.toReversed()) {
     const card = element('article', '', 'report'); const head = element('div', '', 'report-head');
     head.append(element('h3', `리포트 ${r.id.slice(0, 8)}`), element('span', labels[r.status] || r.status, 'badge')); card.append(head);

@@ -32,6 +32,19 @@ use windows_sys::Win32::{
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 #[tauri::command]
+async fn get_diagnostic_intake(
+) -> Result<data_usage_counter::diagnostic_intake::IntakeTarget, String> {
+    data_usage_counter::diagnostic_intake::target().await
+}
+
+#[tauri::command]
+async fn submit_diagnostic_report(
+    report: serde_json::Value,
+) -> Result<data_usage_counter::diagnostic_intake::DiagnosticReceipt, String> {
+    data_usage_counter::diagnostic_intake::submit(report).await
+}
+
+#[tauri::command]
 async fn get_diagnostic_environment() -> Result<DiagnosticEnvironment, String> {
     tauri::async_runtime::spawn_blocking(collect_diagnostic_environment)
         .await
@@ -537,6 +550,8 @@ fn main() {
             get_network_interfaces,
             get_current_network_identity,
             get_diagnostic_environment,
+            get_diagnostic_intake,
+            submit_diagnostic_report,
             get_realtime_stats,
             get_top_processes,
             kill_process,

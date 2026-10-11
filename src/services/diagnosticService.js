@@ -27,7 +27,10 @@ export function createDiagnosticRecorder({ now = () => Date.now(), id = () => cr
   let report = null;
   let recording = false;
   let started = 0;
+  let stopped = 0;
   let aliases = new Map();
+  let lastEvent = '';
+  let repeats = 0;
   const alias = (type, raw) => {
     if (!raw) return '';
     const key = `${type}:${String(raw).trim().toLowerCase()}`;
@@ -66,12 +69,20 @@ export function createDiagnosticRecorder({ now = () => Date.now(), id = () => cr
   }
   function add(event) {
     if (!recording) return;
-    if (report.events.length >= MAX_DIAGNOSTIC_EVENTS) { recording = false; report.truncated = true; return; }
+    // Two identical samples are needed by the connection stabilizer. Further
+    // identical polls add no replay evidence, even when recording for hours.
+    const signature = JSON.stringify(event);
+    repeats = signature === lastEvent ? repeats + 1 : 1;
+    lastEvent = signature;
+    if (repeats > 2 && event.type !== 'classification') return;
+    // Keep receiving new transitions until the user stops. Missing older
+    // transitions are explicitly marked, so replay cannot claim full evidence.
+    if (report.events.length >= MAX_DIAGNOSTIC_EVENTS) { report.events.shift(); report.truncated = true; }
     report.events.push({ elapsedMs: Math.min(86400000, Math.max(0, now() - started)), ...event });
   }
   return {
     start(config, environment = {}) {
-      aliases = new Map(); started = now(); recording = true;
+      aliases = new Map(); lastEvent = ''; repeats = 0; started = now(); stopped = started; recording = true;
       report = { schemaVersion: 1, reportId: id(), appVersion: /^\d+\.\d+\.\d+$/.test(environment.appVersion || '') ? environment.appVersion : '0.0.0',
         environment: { platform: environment.platform === 'windows' ? 'windows' : 'preview', admin: Boolean(environment.admin),
           osVersion: versionText(environment.osVersion), architecture: archs.includes(environment.architecture) ? environment.architecture : '',
@@ -85,8 +96,9 @@ export function createDiagnosticRecorder({ now = () => Date.now(), id = () => cr
       profileId: alias('profile', raw.profileId), targetFingerprint: alias('device', config.networkBindings?.find(b => b.profileId === raw.profileId)?.fingerprint),
       meteringMode: modes.includes(raw.meteringMode) ? raw.meteringMode : 'unclassified' }); },
     error() { add({ type: 'detection-error' }); },
-    stop() { recording = false; },
-    status() { return { recording, eventCount: report?.events.length || 0, available: Boolean(report), truncated: Boolean(report?.truncated) }; },
+    stop() { if (recording) stopped = now(); recording = false; },
+    status() { return { recording, eventCount: report?.events.length || 0, available: Boolean(report), truncated: Boolean(report?.truncated),
+      elapsedSeconds: report ? Math.floor(Math.min(86400000, Math.max(0, (recording ? now() : stopped) - started)) / 1000) : 0 }; },
     export({ symptom = 'other', description = '' } = {}) {
       if (!report) throw new Error('먼저 진단 기록을 시작해주세요.');
       return parseDiagnosticReport({ ...report, symptom, description: redactDescription(description) });
