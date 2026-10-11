@@ -54,7 +54,7 @@ export default function Header({
 
   return (
     <header
-      className="glass-panel"
+      className="glass-panel dashboard-header"
       style={{
         padding: '12px 18px',
         marginBottom: '14px',
@@ -68,7 +68,7 @@ export default function Header({
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
         
         {/* Left Branding */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div className="dashboard-brand" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{
             width: '36px',
             height: '36px',
@@ -100,7 +100,7 @@ export default function Header({
         </div>
 
         {/* Right Action Controls */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'relative', zIndex: 60 }}>
+        <div className="dashboard-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'relative', zIndex: 60 }}>
           
           {/* Compact Theme Dropdown Selector */}
           <div
@@ -124,7 +124,6 @@ export default function Header({
                 color: 'var(--text-main)',
                 fontSize: '0.78rem',
                 fontWeight: '600',
-                outline: 'none',
                 cursor: 'pointer',
                 padding: '5px 0'
               }}

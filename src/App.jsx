@@ -504,7 +504,7 @@ export default function App() {
       <TitleBar title="돌핀 데이터 (Dolphin Data)" />
 
       {/* Scrollable Dashboard Body */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '14px 20px' }}>
+      <div className="dashboard-body">
         
         {/* Top Header */}
         <Header
@@ -536,12 +536,7 @@ export default function App() {
         />
 
         {/* 2-Column Responsive Dashboard Layout */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(460px, 1fr))',
-          gap: '18px',
-          alignItems: 'start'
-        }}>
+        <div className="dashboard-grid">
           
           {/* Left Column: Data Quota & Rolling Traffic Graph */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>

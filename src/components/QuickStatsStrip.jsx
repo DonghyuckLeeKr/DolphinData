@@ -11,12 +11,7 @@ export default function QuickStatsStrip({ telemetry, config, activeProfile, netw
   const totalUpBytes = telemetry.totalTx || 0;
 
   return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
-      gap: '14px',
-      marginBottom: '18px'
-    }}>
+    <div className="quick-stats-strip">
       {/* Stat 1: Today Downloaded */}
       <div className="glass-card" style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: '12px' }}>
         <div style={{

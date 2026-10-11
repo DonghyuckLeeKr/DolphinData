@@ -3,21 +3,19 @@
   --font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
   
   /* Ocean Deep Marine Slate (Default Theme) */
-  --bg-primary: #0a1124;
-  --bg-gradient: radial-gradient(circle at 80% 20%, rgba(14, 165, 233, 0.15), transparent 45%),
-                 radial-gradient(circle at 10% 80%, rgba(56, 189, 248, 0.12), transparent 40%),
-                 linear-gradient(145deg, #090e1a 0%, #0d1b38 50%, #070d18 100%);
-  --glass-bg: rgba(13, 27, 56, 0.75);
-  --glass-card: rgba(18, 38, 77, 0.55);
-  --glass-card-hover: rgba(26, 52, 105, 0.75);
-  --glass-border: rgba(56, 189, 248, 0.22);
-  --glass-border-light: rgba(56, 189, 248, 0.12);
-  --glass-border-glow: rgba(56, 189, 248, 0.45);
-  --shadow-glass: 0 12px 36px -4px rgba(0, 0, 0, 0.5), 0 0 24px -2px rgba(14, 165, 233, 0.15);
+  --bg-primary: #101722;
+  --bg-gradient: linear-gradient(145deg, #101722, #151f2e);
+  --glass-bg: #182231;
+  --glass-card: #1c2838;
+  --glass-card-hover: #202e40;
+  --glass-border: rgba(148, 163, 184, 0.22);
+  --glass-border-light: rgba(148, 163, 184, 0.16);
+  --glass-border-glow: rgba(148, 163, 184, 0.32);
+  --shadow-glass: 0 12px 36px -4px rgba(0, 0, 0, 0.35);
   
   --text-main: #f1f5f9;
-  --text-muted: #94a3b8;
-  --text-dim: #64748b;
+  --text-muted: #a8b6c9;
+  --text-dim: #91a1b7;
   
   --brand-color: #0ea5e9;
   --brand-gradient: linear-gradient(135deg, #0284c7 0%, #38bdf8 100%);
@@ -61,7 +59,7 @@
   --shadow-glass: 0 12px 30px rgba(14, 165, 233, 0.12);
   --text-main: #0f172a;
   --text-muted: #475569;
-  --text-dim: #94a3b8;
+  --text-dim: #64748b;
   --brand-color: #0284c7;
   --brand-badge-bg: rgba(14, 165, 233, 0.15);
   --brand-badge-border: rgba(14, 165, 233, 0.3);
@@ -128,7 +126,7 @@ html, body, #root {
   border-radius: 50%;
   pointer-events: none;
   z-index: 0;
-  animation: oceanPulse 8s ease-in-out infinite alternate;
+  opacity: 0.3;
 }
 
 @keyframes oceanPulse {
@@ -142,8 +140,8 @@ html, body, #root {
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--glass-border-light);
   border-radius: 16px;
-  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.25);
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
   position: relative;
   overflow: hidden;
   z-index: 1;
@@ -152,8 +150,6 @@ html, body, #root {
 .glass-card:hover {
   background: var(--glass-card-hover);
   border-color: var(--glass-border-glow);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 28px -2px rgba(0, 0, 0, 0.35), 0 0 16px rgba(56, 189, 248, 0.15);
 }
 
 .glass-panel {
@@ -233,6 +229,80 @@ html, body, #root {
 .glass-btn:focus-visible {
   outline: 2px solid var(--brand-color);
   outline-offset: 2px;
+}
+
+.dashboard-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 24px 24px;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr));
+  gap: 18px;
+  align-items: start;
+}
+
+.dashboard-grid > div,
+.dashboard-brand,
+.dashboard-brand > div:last-child {
+  min-width: 0;
+}
+
+.dashboard-brand > div:first-child {
+  flex-shrink: 0;
+}
+
+.dashboard-brand h1,
+.dashboard-brand p {
+  overflow-wrap: anywhere;
+}
+
+.dashboard-brand > div:last-child > div,
+.dashboard-actions {
+  flex-wrap: wrap;
+}
+
+.dashboard-header .glass-btn {
+  min-height: 32px;
+}
+
+.quick-stats-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-grid .glass-card {
+  font-variant-numeric: tabular-nums;
+}
+
+button:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--brand-color);
+  outline-offset: 3px;
+}
+
+@media (max-width: 640px) {
+  .dashboard-body {
+    padding: 12px;
+  }
+
+  .dashboard-actions {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-window-container *,
+  .app-window-container::before {
+    animation: none !important;
+    transition: none !important;
+  }
 }
 
 @keyframes updateSpin {
