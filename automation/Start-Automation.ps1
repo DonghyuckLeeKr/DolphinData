@@ -1,4 +1,5 @@
 ﻿$ErrorActionPreference = 'Stop'
+Import-Module (Join-Path $PSHOME 'Modules\Microsoft.PowerShell.Security\Microsoft.PowerShell.Security.psd1') -Global -ErrorAction Stop
 $taskStore = Join-Path $env:LOCALAPPDATA 'DolphinData\automation'
 $taskTokenPath = Join-Path $taskStore 'discord-token.dpapi'
 $codexCommand = Get-Command codex.exe -ErrorAction SilentlyContinue

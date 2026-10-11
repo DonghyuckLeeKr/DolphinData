@@ -41,6 +41,25 @@ test('Discord approvals require exact owner, guild and channel; role labels are 
 test('AI process does not inherit GitHub, Discord or signing credentials', () => {
   assert.deepEqual(agentEnvironment({ PATH: 'bin', LOCALAPPDATA: 'local', GH_TOKEN: 'secret', DOLPHIN_DISCORD_TOKEN: 'secret', TAURI_PRIVATE_KEY: 'secret' }), { PATH: 'bin', LOCALAPPDATA: 'local' });
 });
+test('a workflow registered by a PR cannot enable automatic fixes before it exists on main', async () => {
+  for (const onMain of [false, true]) {
+    const controller = new AutomationController({ directory: os.tmpdir(), repositoryRoot: process.cwd(), execute: async (command, args) => {
+      if (command !== 'gh') return 'Logged in';
+      const endpoint = args[1];
+      if (endpoint.includes('/contents/')) {
+        assert.ok(endpoint.endsWith('?ref=main'));
+        if (!onMain) throw new Error('404: workflow absent from main');
+        return JSON.stringify({ type: 'file' });
+      }
+      if (endpoint.includes('/environments/')) return JSON.stringify({ protection_rules: [{ type: 'required_reviewers', reviewers: ['owner'] }] });
+      return JSON.stringify({ state: 'active' });
+    } });
+    const ready = await controller.readiness();
+    assert.equal(ready.codex, true);
+    assert.equal(ready.releaseApproval, true);
+    assert.equal(ready.previewWorkflow, onMain);
+  }
+});
 test('local report intake persists/reloads and loopback API rejects unauthorized/foreign origins', async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'dolphin-automation-test-'));
   const controller = new AutomationController({ directory, repositoryRoot: process.cwd(), execute: async () => '' }); await controller.init();

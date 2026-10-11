@@ -52,9 +52,11 @@ export class AutomationController extends EventEmitter {
     const results = await Promise.allSettled([
       this.execute(this.codex, ['login', 'status'], { timeout: 10000 }),
       this.api(`repos/${REPOSITORY}/actions/workflows/preview-windows.yml`),
-      this.api(`repos/${REPOSITORY}/environments/production`)
+      this.api(`repos/${REPOSITORY}/environments/production`),
+      this.api(`repos/${REPOSITORY}/contents/.github/workflows/preview-windows.yml?ref=main`)
     ]);
-    const value = { codex: results[0].status === 'fulfilled', previewWorkflow: results[1].status === 'fulfilled',
+    const value = { codex: results[0].status === 'fulfilled', previewWorkflow: results[1].status === 'fulfilled'
+      && results[3].status === 'fulfilled' && results[3].value?.type === 'file',
       releaseApproval: results[2].status === 'fulfilled' && (results[2].value.protection_rules || []).some(r => r.type === 'required_reviewers' && r.reviewers?.length),
       busy: this.busy };
     this.readinessCache = { at: Date.now(), value }; return value;

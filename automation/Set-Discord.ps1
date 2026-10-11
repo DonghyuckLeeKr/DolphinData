@@ -1,4 +1,5 @@
 ﻿$ErrorActionPreference = 'Stop'
+Import-Module (Join-Path $PSHOME 'Modules\Microsoft.PowerShell.Security\Microsoft.PowerShell.Security.psd1') -Global -ErrorAction Stop
 $taskStore = Join-Path $env:LOCALAPPDATA 'DolphinData\automation'
 New-Item -ItemType Directory -Path $taskStore -Force | Out-Null
 $guildId = Read-Host '디스코드 서버 ID'
