@@ -7,7 +7,7 @@ import { AutomationController } from '../automation/controller.mjs';
 import { createAdminServer } from '../automation/server.mjs';
 import { assertAllowedChanges, assertApproval, authorizeDiscord, digest } from '../automation/policy.mjs';
 import { agentEnvironment } from '../automation/process.mjs';
-import { buildFixPrompt, canRequestFix } from '../automation/fixRequest.mjs';
+import { buildFixPrompt, canRequestFix, codexFixArguments } from '../automation/fixRequest.mjs';
 import { createDiagnosticRecorder } from '../src/services/diagnosticService.js';
 import { DEFAULT_PROFILE } from '../src/services/storageService.js';
 
@@ -32,6 +32,16 @@ test('UI feedback uses its description without granting instructions or needing 
   assert.ok(!canRequestFix({ status: 'failed', candidateSha: sha }));
   assert.ok(!canRequestFix({ status: 'failed', prUrl: 'https://github.com/pr' }));
   assert.ok(canRequestFix({ status: 'insufficient-evidence' }));
+});
+test('ignoring user config restores the Windows sandbox while preserving bounded edit permissions', () => {
+  for (const platform of ['win32', 'linux']) {
+    const args = codexFixArguments('candidate', 'summary.txt', platform);
+    assert.equal(args.includes('windows.sandbox="elevated"'), platform === 'win32');
+    assert.equal(args[args.indexOf('--sandbox') + 1], 'workspace-write');
+    assert.equal(args[args.indexOf('-C') + 1], 'candidate');
+    assert.ok(args.includes('shell_environment_policy.inherit="none"'));
+    assert.ok(!args.some(arg => arg.includes('bypass') || arg.includes('danger-full-access')));
+  }
 });
 test('approvals bind exact commit, patch and successful preview', () => {
   const ready = { status: 'review-ready', candidateSha: sha, patchDigest: digest('patch'), previewRunId: 42, previewConclusion: 'success' };

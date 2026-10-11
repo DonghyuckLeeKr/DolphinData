@@ -14,6 +14,7 @@
 ## 최초 운영 준비
 
 - Node.js 22+, Git, GitHub CLI, Codex CLI가 필요합니다. `codex login`과 `gh auth login`을 먼저 완료합니다. Codex CLI는 `--ignore-user-config`, `--ignore-rules`, `--ephemeral` 옵션을 지원해야 합니다. 현재 PC의 CLI 0.162.0-alpha.17.2에서 확인했습니다.
+- Windows에서는 Codex의 기본 Agent sandbox 설정을 먼저 완료해야 합니다. 자동 수정은 사용자 설정 파일을 제외하므로 실행 인자로 `windows.sandbox="elevated"`를 지정해 Windows sandbox 구현을 활성화합니다. `workspace-write` 파일 범위와 네트워크 제한은 유지합니다. 구성에서 이 항목이 빠지면 로그인에 성공해도 조회·편집 명령이 차단될 수 있습니다.
 - 이 변경을 main에 반영해야 GitHub `preview-windows.yml` 검사 작업이 등록됩니다. 이후 새 PR마다 해당 커밋의 Windows 검사가 자동 실행됩니다. 관리자 화면에 준비 상태가 표시됩니다.
 - 저장소 Settings → Environments → `production`: required reviewers에 관리자를 지정하고, 혼자 운영하는 경우 본인 실행 승인 금지를 해제합니다. 관리자 화면과 봇은 승인자가 없는 환경에서는 코드 승인도 거절합니다.
 - 기존 GitHub `TAURI_PRIVATE_KEY`, `TAURI_KEY_PASSWORD`가 업데이트 서명에 사용됩니다. 일반 Windows 실행파일의 인증서 서명과는 별개입니다.

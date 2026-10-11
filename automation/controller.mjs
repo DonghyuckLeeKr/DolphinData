@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile, rename, readdir, lstat } from 'node:fs/prom
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { parseDiagnosticReport, publicDiagnosticContext, redactDescription } from '../src/services/diagnosticService.js';
-import { buildFixPrompt, canRequestFix } from './fixRequest.mjs';
+import { buildFixPrompt, canRequestFix, codexFixArguments } from './fixRequest.mjs';
 import { replayDiagnosticReport } from '../src/services/diagnosticReplay.js';
 import { REPOSITORY, isId, isSha, digest, assertAllowedChanges, assertApproval } from './policy.mjs';
 import { run, agentEnvironment } from './process.mjs';
@@ -104,8 +104,7 @@ export class AutomationController extends EventEmitter {
     const context = publicDiagnosticContext(record.report);
     const prompt = buildFixPrompt(record.report);
     const summaryPath = path.join(this.directory, `${record.id}-attempt-${record.attempts || 1}-summary.txt`);
-    await this.execute(this.codex, ['exec', '--ignore-user-config', '--ignore-rules', '--ephemeral', '--sandbox', 'workspace-write',
-      '-c', 'approval_policy="never"', '-c', 'shell_environment_policy.inherit="none"', '-C', workspace, '--output-last-message', summaryPath, '--color', 'never', '-'],
+    await this.execute(this.codex, codexFixArguments(workspace, summaryPath),
     { cwd: workspace, input: prompt, env: agentEnvironment(process.env), timeout: 20 * 60000, maxBytes: 8 * 1024 * 1024 });
     record.aiSummary = this.safeError(redactDescription(await readFile(summaryPath, 'utf8').catch(() => '')));
     // Trust only the diff; reject commits/config rewrites as well as forbidden files.
