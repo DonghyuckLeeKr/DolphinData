@@ -6,6 +6,11 @@ export const isTauriAvailable = () => {
   return typeof window !== 'undefined' && (Boolean(window.__TAURI__) || Boolean(window.__TAURI_IPC__));
 };
 
+export const fetchDiagnosticEnvironment = async () => {
+  const invoke = await getTauriInvoke();
+  return invoke ? invoke('get_diagnostic_environment') : {};
+};
+
 let simState = {
   totalRx: 1024 * 1024 * 500, // 500 MB base
   totalTx: 1024 * 1024 * 120, // 120 MB base

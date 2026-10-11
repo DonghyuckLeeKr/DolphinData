@@ -1,0 +1,8 @@
+{
+  "name": "dolphindata-local-automation",
+  "private": true,
+  "type": "module",
+  "scripts": { "start": "node server.mjs" },
+  "engines": { "node": ">=22" },
+  "dependencies": { "discord.js": "14.27.0" }
+}

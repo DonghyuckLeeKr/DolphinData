@@ -7,6 +7,7 @@ import { getNetworkDisplayInfo } from '../utils/networkDisplay';
 import { buildSupportMailto, SUPPORT_EMAIL } from '../utils/appMetadata';
 import { MAX_BACKUP_FILE_BYTES, parseBackupConfig } from '../services/backupService';
 import { createCsvRow } from '../utils/csvSecurity';
+import DiagnosticPanel from './DiagnosticPanel';
 
 function SettingsModal({
   config,
@@ -548,6 +549,8 @@ function SettingsModal({
               </button>
             </div>
           </div>
+
+          <DiagnosticPanel config={config} admin={runningAsAdmin} />
 
           {/* Application version and support contact */}
           <div>

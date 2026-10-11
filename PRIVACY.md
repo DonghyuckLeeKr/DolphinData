@@ -8,6 +8,12 @@ Plan profiles, calibration values, usage history, alert preferences, UI settings
 
 Network adapter counters and process CPU/memory information are read from Windows and displayed locally. DolphinData does not send these measurements to the project maintainers or to a DolphinData server.
 
+## Optional diagnostic reports
+
+Users can explicitly start a bounded, in-memory diagnostic recording from Settings, review the JSON, and download it. Recording is off by default. Reports replace network/device identifiers with per-report aliases and represent usage only as fixed presence markers. Reports can include Windows version, CPU architecture, and installed USB network driver versions and common hardware model VID/PID values. SIM identifiers, device serials and full raw device IDs are excluded. Free-text descriptions are partially redacted; users should review them before sharing. The desktop app does not upload these files automatically.
+
+If users send a report to the maintainer or use the optional Discord report command, the recipient and Discord can access the attachment. The maintainer's local automation stores reports on the maintainer's PC. Free text is excluded from automated AI requests and public PR descriptions; anonymized diagnostic structure and repository code can be processed by Codex, and proposed code/tests are sent to GitHub for review. Discord receives status cards when the maintainer explicitly connects the bot. AI changes require administrator review and release approval.
+
 ## Network connections
 
 DolphinData can make the following network connections:

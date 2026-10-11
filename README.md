@@ -6,13 +6,18 @@ Tauri(Rust)와 React 기반으로 제작된 가볍고 정밀한 윈도우 데이
 
 ---
 
-## 최신 버전 다운로드 (v1.2.0)
+## 최신 정식 버전 다운로드
 
 GitHub 릴리즈 페이지에서 최신 윈도우 설치 파일을 바로 다운로드하실 수 있습니다:
 
-- **[Windows 설치 파일 (.exe)](https://github.com/DonghyuckLeeKr/DolphinData/releases/download/v1.2.0/DolphinData_1.2.0_x64-setup.exe)** (권장)
-- **[Windows MSI 패키지 (.msi)](https://github.com/DonghyuckLeeKr/DolphinData/releases/download/v1.2.0/DolphinData_1.2.0_x64_en-US.msi)**
-- 전체 릴리즈 내역: [GitHub Releases v1.2.0](https://github.com/DonghyuckLeeKr/DolphinData/releases/tag/v1.2.0)
+- **[최신 Windows 설치파일 및 자동 업데이트](https://github.com/DonghyuckLeeKr/DolphinData/releases/latest)**: `.exe` 설치파일을 권장하며 `.msi`도 제공합니다.
+- 전체 릴리즈 내역: [GitHub Releases](https://github.com/DonghyuckLeeKr/DolphinData/releases)
+
+## 진단 리포트와 개발 자동화 (v1.3.0 준비 중)
+
+앱 설정에서 문제 동작을 기록해 개인정보를 별칭으로 처리한 진단 JSON을 내보낼 수 있습니다. 개발자는 이 PC의 관리자 화면 또는 디스코드 봇에서 리포트를 확인하고, 자동 수정 → GitHub 검사 설치파일 → 수정 승인 → 배포 승인 순서로 진행합니다. 디스코드는 봇 생성 및 연결 설정 후 사용할 수 있습니다.
+
+관리자 실행: `automation/Start-Automation.cmd`. [운영 및 디스코드 설정 안내](docs/DEVELOPMENT_AUTOMATION.md)를 확인해주세요. 정식 배포 전 실제 USB 장치 확인과 관리자 승인이 필요합니다.
 
 ## 주요 기능
 

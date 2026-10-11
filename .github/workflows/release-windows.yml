@@ -12,9 +12,14 @@ permissions:
 jobs:
   release-windows:
     runs-on: windows-latest
+    environment: production
+    timeout-minutes: 45
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -29,9 +34,9 @@ jobs:
         run: npm ci
 
       - name: Validate release tag
-        if: github.ref_type == 'tag'
         shell: pwsh
         run: |
+          if ($env:GITHUB_REF_TYPE -ne 'tag') { throw 'Select an exact version tag to release' }
           $expectedTag = "v$((Get-Content package.json -Raw | ConvertFrom-Json).version)"
           if ($env:GITHUB_REF_NAME -ne $expectedTag) {
             throw "Release tag $env:GITHUB_REF_NAME does not match package version $expectedTag"
@@ -57,8 +62,8 @@ jobs:
           tagName: v__VERSION__
           releaseName: DolphinData v__VERSION__
           releaseBody: |
-            USB 라우터의 재연결 및 연결 해제 시 네트워크 분류를 안정화했습니다.
-            설정 화면에서 필요할 때 관리자 권한으로 다시 실행할 수 있습니다.
+            관리자 검토 및 승인을 거친 DolphinData 업데이트입니다.
+            변경 사항은 연결된 커밋과 CHANGELOG.md에서 확인해주세요.
             서명된 Windows 자동 업데이트 번들과 설치 파일을 제공합니다.
           releaseDraft: false
           prerelease: false

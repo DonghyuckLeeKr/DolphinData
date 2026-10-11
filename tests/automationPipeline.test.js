@@ -1,0 +1,78 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { AutomationController } from '../automation/controller.mjs';
+import { run } from '../automation/process.mjs';
+import { createDiagnosticRecorder } from '../src/services/diagnosticService.js';
+import { DEFAULT_PROFILE } from '../src/services/storageService.js';
+
+test('local candidate pipeline uses real Git, rejects stale approvals and excludes private descriptions', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'dolphin-pipeline-test-'));
+  const fixture = path.join(directory, 'source'); await mkdir(path.join(fixture, 'src/services'), { recursive: true });
+  await mkdir(path.join(fixture, 'src-tauri')); await mkdir(path.join(fixture, 'tests'));
+  for (const [file, contents] of Object.entries({
+    'src/services/example.js': 'export const value = 1;\n',
+    'tests/example.test.js': '// fixture\n',
+    'package.json': JSON.stringify({ name: 'dolphindata', version: '1.2.11' }),
+    'package-lock.json': JSON.stringify({ name: 'dolphindata', version: '1.2.11', packages: { '': { version: '1.2.11' } } }),
+    'src-tauri/Cargo.toml': '[package]\nname = "data-usage-counter"\nversion = "1.2.11"\n',
+    'src-tauri/Cargo.lock': '[[package]]\nname = "data-usage-counter"\nversion = "1.2.11"\n',
+    'src-tauri/tauri.conf.json': JSON.stringify({ package: { version: '1.2.11' } })
+  })) await writeFile(path.join(fixture, file), contents);
+  const git = args => run('git', args, { cwd: fixture });
+  await git(['init', '-b', 'main']); await git(['add', '.']);
+  await git(['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-m', 'fixture']);
+  const baseSha = await git(['rev-parse', 'HEAD']); const pushTarget = path.join(directory, 'remote.git');
+  await run('git', ['init', '--bare', pushTarget]);
+  await git(['push', pushTarget, `${baseSha}:refs/heads/main`]);
+  let prompt; let mergeCalled = false;
+  const execute = async (file, args, options = {}) => {
+    if (file === 'codex-test') { prompt = options.input; await writeFile(path.join(options.cwd, 'src/services/example.js'), 'export const value = 2;\n'); return 'fake model output'; }
+    if (file === 'gh' && args[0] === 'api') {
+      const endpoint = args[1];
+      if (endpoint.endsWith('/commits/main')) return JSON.stringify({ sha: baseSha });
+      throw new Error(`Unexpected test API ${endpoint}`);
+    }
+    if (file === 'gh' && args[0] === 'pr') return 'https://github.com/DonghyuckLeeKr/DolphinData/pull/123';
+    if (file === 'git' && args[0] === 'fetch') return run(file, ['fetch', fixture, args[2]], options);
+    if (file === 'git' && args.includes('push')) { const safeArgs = args.map(arg => arg === 'https://github.com/DonghyuckLeeKr/DolphinData.git' ? pushTarget : arg); return run(file, safeArgs, options); }
+    return run(file, args, options);
+  };
+  try {
+    const controller = new AutomationController({ directory: path.join(directory, 'store'), repositoryRoot: fixture, execute, codex: 'codex-test' }); await controller.init();
+    const recorder = createDiagnosticRecorder(); recorder.start({ profiles: [DEFAULT_PROFILE], activeProfileId: DEFAULT_PROFILE.id }); recorder.observe({ connected: false }); recorder.stop();
+    const view = await controller.importReport(recorder.export({ description: 'PRIVATE USER TEXT MUST NOT LEAVE PC', symptom: 'other' }));
+    const record = controller.get(view.id); record.status = 'fixing'; await controller.generate(record);
+    assert.equal(record.status, 'preview-pending'); assert.ok(!prompt.includes('PRIVATE USER TEXT'));
+    assert.equal(record.previewTitle, `Preview PR-123 ${record.candidateSha}`);
+    const remoteSha = await run('git', ['--git-dir', pushTarget, 'rev-parse', `refs/heads/${record.branch}`]); assert.equal(remoteSha, record.candidateSha);
+    const packageData = JSON.parse(await readFile(path.join(record.workspace, 'package.json'), 'utf8')); assert.equal(packageData.version, '1.2.12');
+    assert.equal((await readFile(path.join(record.workspace, 'src/services/example.js'), 'utf8')).replace(/\r\n/g, '\n'), 'export const value = 2;\n');
+    assert.ok(!(await readFile(path.join(record.workspace, 'tests', `diagnostic-capture-${record.id}.test.js`), 'utf8')).includes('PRIVATE USER TEXT'));
+    let currentMain = 'b'.repeat(40);
+    controller.api = async endpoint => {
+      if (endpoint.includes('/workflows/preview-windows.yml/runs')) return { workflow_runs: [{ id: 42, display_title: record.previewTitle, head_sha: record.candidateSha, status: 'completed', conclusion: 'success', html_url: 'https://github.com/DonghyuckLeeKr/DolphinData/actions/runs/42' }] };
+      if (endpoint.endsWith('/actions/runs/42')) return { conclusion: 'success', display_title: record.previewTitle, head_sha: record.candidateSha };
+      if (endpoint.endsWith('/pulls/123')) return { head: { sha: record.candidateSha, repo: { full_name: 'DonghyuckLeeKr/DolphinData' } }, base: { ref: 'main' } };
+      if (endpoint.endsWith('/commits/main')) return { sha: currentMain };
+      if (endpoint.endsWith(`/git/commits/${record.candidateSha}`)) return { tree: { sha: record.candidateTree }, parents: [{ sha: baseSha }] };
+      if (endpoint.includes('/contents/package.json')) return { content: Buffer.from(JSON.stringify(packageData)).toString('base64') };
+      if (endpoint.endsWith('/merge')) { mergeCalled = true; return {}; }
+      throw new Error(`Unexpected approval API ${endpoint}`);
+    };
+    await controller.refresh(record.id); assert.equal(record.status, 'review-ready');
+    controller.readiness = async () => ({ releaseApproval: true });
+    await assert.rejects(controller.approveCode(record.id, { sha: record.candidateSha, patchDigest: record.patchDigest, actor: 'test' }), /코드가 바뀌었습니다/);
+    assert.equal(mergeCalled, false); assert.equal(controller.busy, false);
+    currentMain = baseSha; record.status = 'review-ready';
+    await controller.approveCode(record.id, { sha: record.candidateSha, patchDigest: record.patchDigest, actor: 'test' });
+    assert.equal(record.status, 'release-pending'); assert.equal(record.releaseSha, record.candidateSha);
+    assert.equal(await run('git', ['--git-dir', pushTarget, 'rev-parse', 'refs/heads/main']), record.candidateSha);
+    assert.equal(await run('git', ['--git-dir', pushTarget, 'rev-parse', 'refs/tags/v1.2.12']), record.candidateSha);
+  } finally {
+    assert.ok(path.resolve(directory).startsWith(path.join(os.tmpdir(), 'dolphin-pipeline-test-')));
+    await rm(directory, { recursive: true, force: true });
+  }
+});

@@ -1,0 +1,74 @@
+name: Preview Windows diagnostic fix
+run-name: Preview ${{ inputs.request_id || format('PR-{0}', github.event.pull_request.number) }} ${{ inputs.candidate_sha || github.event.pull_request.head.sha }}
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact candidate commit
+        required: true
+      request_id:
+        description: Local diagnostic request UUID
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - name: Validate operator inputs
+        if: github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          REQUEST_ID: ${{ inputs.request_id }}
+        run: |
+          if ($env:CANDIDATE_SHA -notmatch '^[a-f0-9]{40}$') { throw 'Invalid commit' }
+          if ($env:REQUEST_ID -notmatch '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$') { throw 'Invalid request' }
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha || github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install application dependencies
+        run: npm ci
+      - name: JavaScript regression tests
+        run: npm test
+      - name: Frontend checks
+        run: npm run lint
+      - name: Rust regression tests
+        working-directory: src-tauri
+        run: cargo test --locked
+      - name: Rust formatting
+        working-directory: src-tauri
+        run: cargo fmt --check
+      - name: Build review installer without release credentials
+        run: npm run tauri -- build --bundles nsis
+      - name: Record exact source and installer checksums
+        shell: pwsh
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha || github.event.pull_request.head.sha }}
+          REQUEST_ID: ${{ inputs.request_id || format('PR-{0}', github.event.pull_request.number) }}
+        run: |
+          $actual = (git rev-parse HEAD).Trim()
+          if ($actual -ne $env:CANDIDATE_SHA) { throw 'Source changed' }
+          $files = Get-ChildItem src-tauri/target/release/bundle/nsis -Filter '*setup.exe'
+          if ($files.Count -ne 1) { throw 'Expected one installer' }
+          $manifest = @{ requestId = $env:REQUEST_ID; sha = $actual; installers = @($files | ForEach-Object { @{ name = $_.Name; sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLower() } }) }
+          $manifest | ConvertTo-Json -Depth 4 | Set-Content preview-manifest.json -Encoding utf8
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-preview-${{ inputs.request_id || format('PR-{0}', github.event.pull_request.number) }}
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            src-tauri/target/release/bundle/nsis/*setup.exe
+            preview-manifest.json

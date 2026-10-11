@@ -1,6 +1,7 @@
 // Prevents additional console window on Windows in release
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use data_usage_counter::diagnostics::{collect_diagnostic_environment, DiagnosticEnvironment};
 use data_usage_counter::network_identity::{detect_current_network_identity, NetworkIdentity};
 use data_usage_counter::process_network::ProcessNetworkMonitor;
 use data_usage_counter::telemetry::{NetworkSampler, TelemetryData};
@@ -29,6 +30,13 @@ use windows_sys::Win32::{
 };
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+#[tauri::command]
+async fn get_diagnostic_environment() -> Result<DiagnosticEnvironment, String> {
+    tauri::async_runtime::spawn_blocking(collect_diagnostic_environment)
+        .await
+        .map_err(|_| "진단 환경 수집 작업이 중단되었습니다.".to_string())?
+}
 
 #[cfg(target_os = "windows")]
 const INSTANCE_MUTEX_NAME: &str = "Local\\DolphinData.com.datausage.counter.instance";
@@ -528,6 +536,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             get_network_interfaces,
             get_current_network_identity,
+            get_diagnostic_environment,
             get_realtime_stats,
             get_top_processes,
             kill_process,

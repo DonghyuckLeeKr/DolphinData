@@ -21,6 +21,7 @@ import {
 } from './services/networkTelemetry';
 import { disconnectNetworkProfile, getActiveNetworkBinding, reconcileNetworkProfile, updateNetworkBinding } from './services/networkProfileService';
 import { advanceNetworkObservation } from './services/networkObservation';
+import { diagnosticRecorder } from './services/diagnosticService';
 import { checkAndNotifyThresholds, checkAndNotifyDailySurge } from './services/notificationService';
 import { formatSpeed } from './utils/formatters';
 import Header from './components/Header';
@@ -150,6 +151,7 @@ export default function App() {
       networkDetectionInFlightRef.current = true;
       try {
         const identity = await fetchCurrentNetworkIdentity();
+        diagnosticRecorder.observe(identity);
         const observation = advanceNetworkObservation(networkObservationRef.current, identity);
         networkObservationRef.current = observation;
         const fingerprint = observation.fingerprint;
@@ -183,6 +185,7 @@ export default function App() {
           setPendingNetworkFingerprint(fingerprint);
         }
       } catch (error) {
+        diagnosticRecorder.error();
         console.warn('Network profile detection failed', error);
       } finally {
         networkDetectionInFlightRef.current = false;
@@ -408,6 +411,7 @@ export default function App() {
   }, []);
 
   const handleUpdateNetworkBinding = useCallback((bindingPartial) => {
+    diagnosticRecorder.classify(bindingPartial, configRef.current);
     setConfig(prev => {
       const updated = updateNetworkBinding(prev, bindingPartial);
       if (updated === prev) return prev;
