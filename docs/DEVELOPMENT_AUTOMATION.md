@@ -25,7 +25,7 @@
 ## 디스코드 설정
 
 1. [Discord Developer Portal](https://discord.com/developers/applications)에서 애플리케이션과 봇을 만들고 서버에 초대합니다. `bot`, `applications.commands` 범위를 사용합니다.
-2. 지정 채널에 View Channel, Send Messages, Read Message History 권한을 부여합니다. 관리자 권한은 필요하지 않습니다. Guilds intent만 사용하며 Message Content 등 privileged intents는 필요하지 않습니다.
+2. 설치 범위는 `bot`, `applications.commands`, 권한은 View Channel, Send Messages, Embed Links, Read Message History를 선택합니다. 비공개 승인 채널은 ‘멤버 또는 역할 추가’에서 봇 역할도 허용해야 합니다. 관리자 권한은 필요하지 않습니다. Guilds intent만 사용하며 Message Content 등 privileged intents는 필요하지 않습니다.
 3. 디스코드 개발자 모드를 켜고 서버·리포트 채널·본인 계정 ID를 복사합니다. 리포트에는 사용자의 설명이 첨부파일로 포함될 수 있으므로 채널 접근 권한을 제한해주세요.
 4. `automation/Set-Discord.cmd` 더블클릭. 토큰은 화면에 표시되지 않는 보안 입력으로 받고 Windows DPAPI로 암호화해 이 PC에 저장합니다. 토큰을 채팅·소스·GitHub 이슈에 붙여 넣지 않습니다.
 5. `automation/Start-Automation.cmd` 더블클릭. 봇이 지정 서버의 `/dolphin-report` 명령을 등록합니다. 파일 접수, 자동 수정, 수정 승인, 배포 승인을 이 채널에서 진행합니다.
