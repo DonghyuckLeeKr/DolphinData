@@ -12,4 +12,3 @@ if ((Get-FileHash -LiteralPath "$intakeDestination.download" -Algorithm SHA256).
 Move-Item -LiteralPath "$intakeDestination.download" -Destination $intakeDestination -Force
 [IO.File]::WriteAllText((Join-Path $intakeStore 'free-intake.json'), '{"enabled":true}', [Text.UTF8Encoding]::new($false))
 Write-Host '무료 외부 접수 연결 도구를 검증하고 준비했습니다. Start-Automation.cmd를 다시 실행해주세요.'
-

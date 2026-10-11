@@ -1,7 +1,7 @@
 use reqwest::{redirect::Policy, Client, Url};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const CONFIG_URL: &str = "https://raw.githubusercontent.com/DonghyuckLeeKr/DolphinData/main/support/diagnostic-intake.json";
 const LOCAL_ENDPOINT: &str = "http://127.0.0.1:4175/v1/reports";
@@ -73,7 +73,17 @@ fn public_endpoint(endpoint: &str) -> Result<Url, String> {
 }
 
 async fn resolve(client: &Client) -> Result<(Url, &'static str), String> {
-    if let Ok(response) = client.get(CONFIG_URL).send().await {
+    // Avoid an old cached routing file after the operator reconnects the tunnel.
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    if let Ok(response) = client
+        .get(CONFIG_URL)
+        .query(&[("t", timestamp)])
+        .send()
+        .await
+    {
         if response.status().is_success() && response.content_length().unwrap_or(0) <= 4096 {
             let bytes = small_body(response).await?;
             if bytes.len() > 4096 {
