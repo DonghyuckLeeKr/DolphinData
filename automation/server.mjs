@@ -8,9 +8,10 @@ import { safeEqual } from './policy.mjs';
 import { MAX_DIAGNOSTIC_BYTES } from '../src/services/diagnosticService.js';
 import { createIntakeServer } from './intake.mjs';
 import { startPublicIntake } from './publicIntake.mjs';
+import { DailyBatchRunner } from './daily.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
-export async function createAdminServer(controller, { token = randomBytes(32).toString('hex'), port = 4174, discord = null, publicIntake = null } = {}) {
+export async function createAdminServer(controller, { token = randomBytes(32).toString('hex'), port = 4174, discord = null, publicIntake = null, daily = null } = {}) {
   let origin;
   const server = http.createServer(async (req, res) => {
     res.setHeader('X-Content-Type-Options', 'nosniff'); res.setHeader('Cache-Control', 'no-store');
@@ -26,19 +27,26 @@ export async function createAdminServer(controller, { token = randomBytes(32).to
         res.writeHead(200, { 'Content-Type': `${file[1]}; charset=utf-8` }); res.end(await readFile(path.join(root, file[0]))); return;
       }
       if (!safeEqual(req.headers.authorization, `Bearer ${token}`)) { send(401, { error: '관리자 실행 창에서 열린 주소를 사용해주세요.' }); return; }
-      if (req.method === 'GET' && url.pathname === '/api/status') { send(200, { ...await controller.readiness(), discord: discord?.status || { connected: false, error: '디스코드 설정 대기' }, publicIntake: publicIntake?.status || { connected: false, error: '외부 접수 연결 대기' } }); return; }
+      if (req.method === 'GET' && url.pathname === '/api/status') { send(200, { ...await controller.readiness(), daily: daily?.status(), discord: discord?.status || { connected: false, error: '디스코드 설정 대기' }, publicIntake: publicIntake?.status || { connected: false, error: '외부 접수 연결 대기' } }); return; }
+      if (req.method === 'GET' && url.pathname === '/api/daily-status' && daily) { send(200, daily.status()); return; }
       if (req.method === 'GET' && url.pathname === '/api/reports') { send(200, controller.list()); return; }
       if (req.method !== 'POST') { send(405, { error: '지원하지 않는 요청입니다.' }); return; }
       const chunks = []; let size = 0;
       for await (const chunk of req) { size += chunk.length; if (size > MAX_DIAGNOSTIC_BYTES) { send(413, { error: '파일 한도 초과' }); req.destroy(); return; } chunks.push(chunk); }
       const input = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      if (url.pathname === '/api/daily-run' && daily) {
+        if (!discord?.status.connected && input.previewOnly !== true) throw new Error('디스코드 연결을 먼저 복구해주세요. 승인 요청을 보낼 수 없습니다.');
+        send(200, await daily.run({ previewOnly: input.previewOnly === true })); return;
+      }
+      if (url.pathname === '/api/daily-config' && daily) { send(200, await daily.configure(input)); return; }
       if (url.pathname === '/api/reports') { send(201, await controller.importReport(input)); return; }
       if (url.pathname === '/api/batches') { send(201, await controller.startBatch(input.ids, 'local')); return; }
-      const match = /^\/api\/reports\/([a-f0-9-]+)\/(fix|refresh|approve|release|requeue)$/.exec(url.pathname);
+      const match = /^\/api\/reports\/([a-f0-9-]+)\/(fix|refresh|approve|release|requeue|automatic)$/.exec(url.pathname);
       if (!match) { send(404, { error: '찾을 수 없습니다.' }); return; }
       const [, id, action] = match;
       const result = action === 'fix' ? await controller.startFix(id, 'local') : action === 'refresh' ? await controller.refresh(id)
         : action === 'requeue' ? await controller.returnToQueue(id, 'local')
+        : action === 'automatic' ? await controller.setAutomatic(id, input.allowed, 'local')
         : action === 'approve' ? await controller.approveCode(id, { sha: input.sha, patchDigest: input.patchDigest, actor: 'local' })
         : await controller.approveRelease(id, 'local', input.runId);
       send(200, result);
@@ -54,6 +62,7 @@ async function main() {
   await mkdir(directory, { recursive: true });
   const controller = new AutomationController({ directory, repositoryRoot: path.resolve(root, '..'), codex: process.env.DOLPHIN_CODEX_PATH || 'codex' });
   await controller.init();
+  const daily = new DailyBatchRunner(controller); await daily.init();
   let discord = null;
   if (process.env.DOLPHIN_DISCORD_TOKEN) {
     const config = JSON.parse((await readFile(path.join(directory, 'discord-config.json'), 'utf8')).replace(/^\uFEFF/, ''));
@@ -63,7 +72,7 @@ async function main() {
   }
   const intake = await createIntakeServer(controller);
   const publicIntake = await startPublicIntake(directory, { publish: process.env.DOLPHIN_INTAKE_PUBLISH !== '0' });
-  const admin = await createAdminServer(controller, { discord, publicIntake });
+  const admin = await createAdminServer(controller, { discord, publicIntake, daily });
   console.log('앱 자동 접수 준비 완료 (이 PC). 외부 접수 연결은 접수 전용 포트 4175만 사용합니다.');
   console.log(`DolphinData 개발 자동화 관리자: ${admin.url}`);
   console.log('주소에는 이번 실행의 관리자 키가 포함됩니다. 공유하지 마세요. 종료: Ctrl+C');

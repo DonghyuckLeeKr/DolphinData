@@ -31,6 +31,11 @@ async function api(url, data) {
 const element = (tag, text, className) => { const e = document.createElement(tag); if (text) e.textContent = text; if (className) e.className = className; return e; };
 function renderStatus(status) {
   busy = status.busy; renderSelection();
+  const daily = status.daily;
+  const dailyLabels = { started: '수정 시작', empty: '대기 접수 없음', deferred: '이전 작업 처리 대기', 'needs-evidence': '추가 기록 필요', failed: '시작 실패', interrupted: '중단됨', preparing: '시작 준비 중' };
+  document.querySelector('#daily-status').textContent = daily
+    ? `${daily.enabled ? `매일 한국 시간 ${daily.time} · 하루 최대 10건 자동 수정` : '일일 예약 미설정'}${daily.last ? `\n최근 실행 ${daily.last.day} · ${dailyLabels[daily.last.state] || daily.last.state}${daily.last.jobStatus ? ` · ${labels[daily.last.jobStatus] || daily.last.jobStatus}` : ''}${daily.last.remaining ? ` · 다음 처리 대기 ${daily.last.remaining}건` : ''}` : ''}`
+    : '일일 예약을 사용하려면 자동화 서버를 업데이트해주세요.';
   const target = document.querySelector('#connections'); target.replaceChildren();
   for (const [label, good, text] of [['자동 수정', status.codex, status.codex ? 'Codex 로그인 확인' : 'Codex 로그인 필요'],
     ['GitHub 검사·배포', status.previewWorkflow && status.releaseApproval, status.previewWorkflow && status.releaseApproval ? '검사 작업·승인자 설정 확인' : 'main 반영·승인자 설정 필요'],
@@ -64,6 +69,8 @@ function renderReports(records) {
       selection.append(checkbox, document.createTextNode(`리포트 ${r.id.slice(0, 8)} 함께 처리할 접수로 선택`)); card.append(selection);
     }
     if (r.batchId) card.append(element('div', `일괄 수정 ${r.batchId.slice(0, 8)} · ${labels[r.batchStatus] || r.batchStatus} · 결과와 승인은 일괄 수정 카드에서 확인해주세요.`, 'details'));
+    if (r.dailyRunDate) card.append(element('div', `${r.dailyRunDate} 일일 자동 수정으로 처리한 접수입니다.`, 'details'));
+    if (r.autoProcessExcluded) card.append(element('div', '일일 자동 처리에서 제외된 접수입니다.', 'details'));
     if (r.candidateSha) card.append(element('div', `검사할 코드: ${r.candidateSha}\n수정본 SHA256: ${r.patchDigest}`, 'details'));
     if (r.error) card.append(element('p', r.error, 'error'));
     if (r.aiSummary) { card.append(element('h4', 'AI 처리 결과'), element('div', r.aiSummary, 'description')); }
@@ -77,6 +84,7 @@ function renderReports(records) {
     };
     const link = (label, url) => { if (!url?.startsWith('https://github.com/DonghyuckLeeKr/DolphinData/')) return; const a = element('a', label, 'button'); a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer'; actions.append(a); };
     if (r.canRequestFix) button(r.kind === 'batch' ? '일괄 수정 다시 요청' : r.status === 'received' ? '자동 수정 요청' : '자동 수정 다시 요청', 'fix');
+    if (r.kind !== 'batch') button(r.autoProcessExcluded ? '일일 자동 처리에 포함' : '일일 자동 처리에서 제외', 'automatic', { allowed: Boolean(r.autoProcessExcluded) });
     link('변경 내용 확인', r.prUrl); link('검사·설치파일 확인', r.previewUrl); link('배포 상태 확인', r.releaseUrl);
     link('함께 처리한 수정안 확인', r.batchPrUrl);
     if (r.status === 'review-ready') button('수정 검토 완료 · 승인', 'approve', { sha: r.candidateSha, patchDigest: r.patchDigest }, `변경 내용과 검사 설치파일을 확인했나요?\n승인한 수정본을 main에 병합합니다.\n코드: ${r.candidateSha}\n배포 승인은 별도로 필요합니다.`);

@@ -1,7 +1,7 @@
 import { Client, GatewayIntentBits, Events, SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags, StringSelectMenuBuilder } from 'discord.js';
 import { authorizeDiscord, isId } from './policy.mjs';
 import { MAX_DIAGNOSTIC_BYTES, redactDescription } from '../src/services/diagnosticService.js';
-import { discordCard } from './discordCards.mjs';
+import { loadNotificationCache, recoverNotification, reviewNoticeKey, publishDiscordRecord } from './discordNotifications.mjs';
 import { MAX_BATCH_REPORTS } from './fixRequest.mjs';
 import { readFile, writeFile, rename } from 'node:fs/promises';
 import path from 'node:path';
@@ -11,32 +11,24 @@ export async function startDiscord(controller, config, token) {
   if (![config.guildId, config.channelId, config.ownerId].every(v => /^\d{17,22}$/.test(v))) throw new Error('디스코드 ID 형식이 올바르지 않습니다.');
   const client = new Client({ intents: [GatewayIntentBits.Guilds] });
   const status = { connected: false, error: '' };
-  const messageIds = new Map();
+  const messageIds = new Map(), reviewNotices = new Map();
   const notificationFile = path.join(controller.directory, `discord-messages-${config.channelId}.json`);
   try {
-    for (const [id, message] of Object.entries(JSON.parse(await readFile(notificationFile, 'utf8')))) {
-      if (isId(id) && /^\d{17,22}$/.test(message)) messageIds.set(id, message);
-    }
+    loadNotificationCache(JSON.parse(await readFile(notificationFile, 'utf8')), messageIds, reviewNotices);
   } catch { /* First start, or a corrupt notification cache. Reports remain intact. */ }
   const publishing = new Map(); let notificationSave = Promise.resolve();
   let channel;
   const publishOne = async record => {
     if (!channel) return;
     try {
-      const card = discordCard(record);
-      const existing = messageIds.get(record.id);
-      let message;
-      if (existing) {
-        try { message = await channel.messages.edit(existing, card); }
-        catch (error) { if (error.code !== 10008) throw error; }
-      }
-      if (!message) { message = await channel.send(card); messageIds.set(record.id, message.id); }
+      await publishDiscordRecord(channel, record, messageIds, reviewNotices);
       status.lastReceiptId = record.id;
-      const snapshot = JSON.stringify(Object.fromEntries(messageIds));
+      const snapshot = JSON.stringify({ schemaVersion: 2, messages: Object.fromEntries(messageIds), reviewNotices: Object.fromEntries(reviewNotices) });
       notificationSave = notificationSave.catch(() => {}).then(async () => {
         await writeFile(`${notificationFile}.tmp`, snapshot, { mode: 0o600 }); await rename(`${notificationFile}.tmp`, notificationFile);
       });
       await notificationSave;
+      status.error = '';
     } catch { status.error = '디스코드 카드 전송 실패: 채널 권한·연결을 확인해주세요.'; }
   };
   const publish = record => {
@@ -50,11 +42,10 @@ export async function startDiscord(controller, config, token) {
       channel = await client.channels.fetch(config.channelId);
       if (channel?.guildId !== config.guildId || !channel.isSendable()) throw new Error('채널 설정 오류');
       // Recover cards created before persistent message IDs were introduced.
-      if (!messageIds.size && controller.list().length) {
+      if (controller.list().length && (!messageIds.size || controller.list().some(r => reviewNoticeKey(r) && !reviewNotices.has(reviewNoticeKey(r))))) {
         const recent = await channel.messages.fetch({ limit: 100 });
         for (const message of recent.values()) {
-          const id = message.content.match(/리포트: `([a-f0-9-]+)`/)?.[1];
-          if (message.author.id === client.user.id && isId(id)) messageIds.set(id, message.id);
+          recoverNotification(message, client.user.id, messageIds, reviewNotices);
         }
       }
       const command = new SlashCommandBuilder().setName('dolphin-report').setDescription('돌핀데이터 진단 리포트를 관리자에게 전달합니다')
@@ -82,7 +73,7 @@ export async function startDiscord(controller, config, token) {
         const chunks = []; let length = 0;
         for await (const chunk of response.body) { length += chunk.length; if (length > MAX_DIAGNOSTIC_BYTES) throw new Error('파일 한도를 초과했습니다.'); chunks.push(chunk); }
         const report = await controller.importReport(Buffer.concat(chunks).toString('utf8'));
-        await interaction.editReply(`진단 리포트 ${report.id}를 접수했습니다. 자동 수정은 관리자 승인 후 실행됩니다.`); return;
+        await interaction.editReply(`진단 리포트 ${report.id}를 접수했습니다. 설정된 일일 자동 수정 또는 관리자 요청으로 수정안을 준비합니다. 수정·배포는 별도 승인이 필요합니다.`); return;
       }
       if (interaction.isChatInputCommand() && interaction.commandName === 'dolphin-batch') {
         if (!authorizeDiscord(interaction, config)) { await interaction.reply({ content: '지정된 관리자 계정만 일괄 처리를 시작할 수 있습니다.', flags: MessageFlags.Ephemeral }); return; }
@@ -127,6 +118,11 @@ export async function startDiscord(controller, config, token) {
       else await interaction.reply(payload).catch(() => {});
     }
   });
-  await client.login(token);
-  return { status, close: async () => { controller.off('change', publish); await client.destroy(); } };
+  const retryTimer = setInterval(() => {
+    if (!status.connected) return;
+    for (const record of controller.list().filter(r => reviewNoticeKey(r) && !reviewNotices.has(reviewNoticeKey(r)))) publish(record);
+  }, 60000);
+  try { await client.login(token); }
+  catch (error) { clearInterval(retryTimer); controller.off('change', publish); await client.destroy(); throw error; }
+  return { status, close: async () => { clearInterval(retryTimer); controller.off('change', publish); await client.destroy(); } };
 }

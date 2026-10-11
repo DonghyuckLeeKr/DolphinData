@@ -19,9 +19,18 @@ try {
     & node (Join-Path $PSScriptRoot 'server.mjs') | ForEach-Object {
         $taskOutputLine = [string]$_
         Write-Output $taskOutputLine
-        if (!$taskAdminOpened -and $env:DOLPHIN_OPEN_ADMIN -ne '0' -and $taskOutputLine -match 'http://127\.0\.0\.1:4174/#[a-f0-9]{64}') {
-            $taskAdminOpened = $true
-            Start-Process -FilePath $Matches[0]
+        if ($taskOutputLine -match 'http://127\.0\.0\.1:4174/#[a-f0-9]{64}') {
+            $taskAdminAddress = $Matches[0]
+            $taskAccessPath = Join-Path $taskStore 'admin-access.dpapi'
+            $taskEncryptedAccess = ConvertTo-SecureString -String $taskAdminAddress -AsPlainText -Force | ConvertFrom-SecureString
+            [IO.File]::WriteAllText("$taskAccessPath.tmp", $taskEncryptedAccess)
+            Move-Item -LiteralPath "$taskAccessPath.tmp" -Destination $taskAccessPath -Force
+            if (!$taskAdminOpened -and $env:DOLPHIN_OPEN_ADMIN -ne '0') {
+                $taskAdminOpened = $true
+                Start-Process -FilePath $taskAdminAddress
+            }
+            $taskAdminAddress = $null
+            $taskEncryptedAccess = $null
         }
     }
 } finally { Remove-Item Env:\DOLPHIN_DISCORD_TOKEN -ErrorAction SilentlyContinue }

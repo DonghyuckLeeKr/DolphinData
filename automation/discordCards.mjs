@@ -18,6 +18,8 @@ export function discordCard(record) {
   if (record.patchDigest) lines.push(`수정본 SHA256: \`${record.patchDigest}\``);
   if (record.kind === 'batch') lines.splice(1, 0, `선택한 접수 ${record.reportIds.length}건을 하나의 수정안으로 처리합니다.`);
   if (record.batchId) lines.push(`일괄 수정: \`${record.batchId}\` · ${labels[record.batchStatus] || record.batchStatus}`);
+  if (record.dailyRunDate) lines.push(`일일 자동 수정: ${record.dailyRunDate} · 한국 시간 21:00${record.dailyRemaining ? ` · 다음 처리 대기 ${record.dailyRemaining}건` : ''}`);
+  if (record.autoProcessExcluded) lines.push('일일 자동 처리에서 제외된 접수입니다.');
   const fields = record.kind === 'batch' ? record.reports.map(r => ({ name: `문제 설명 · ${r.id.slice(0, 8)}`,
     value: discordText(r.description).slice(0, 280) || '입력된 설명 없음' })) : [{ name: '문제 설명', value: discordText(record.report.description) || '입력된 설명 없음' }];
   if (record.error) fields.push({ name: '처리 안내', value: discordText(record.error) || '관리자 화면에서 확인해주세요.' });

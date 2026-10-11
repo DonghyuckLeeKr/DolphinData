@@ -95,7 +95,7 @@ export class AutomationController extends EventEmitter {
       busy: this.busy };
     this.readinessCache = { at: Date.now(), value }; return value;
   }
-  async startFix(id, actor) {
+  async startFix(id, actor, metadata = {}) {
     const record = this.get(id);
     if (this.busy || !canRequestFix(this.view(record))) throw new Error('실행 중인 작업이 있거나 이미 검토용 수정본 또는 일괄 처리에 연결된 리포트입니다.');
     this.busy = true;
@@ -104,13 +104,14 @@ export class AutomationController extends EventEmitter {
       if (!ready.codex) throw new Error('Codex에 먼저 로그인해주세요.');
       if (!ready.previewWorkflow) throw new Error('먼저 자동화 변경을 main에 반영해 GitHub 검사 작업을 등록해주세요.');
       for (const r of this.fixReports(record)) assertFixEvidence(r);
+      if (metadata.dailyRunDate) { record.dailyRunDate = metadata.dailyRunDate; record.dailyRemaining = metadata.dailyRemaining; }
       record.attempts = (Number.isSafeInteger(record.attempts) ? record.attempts : 0) + 1;
       record.status = 'fixing'; record.error = ''; record.aiSummary = ''; record.audit.push({ at: new Date().toISOString(), actor, action: 'request-fix', attempt: record.attempts }); await this.save(record);
     } catch (e) { this.busy = false; throw e; }
     this.runFix(record);
     return this.view(record);
   }
-  async startBatch(ids, actor) {
+  async startBatch(ids, actor, metadata = {}) {
     if (this.busy) throw new Error('현재 작업이 끝난 뒤 일괄 처리를 시작해주세요. 접수는 계속 보관됩니다.');
     if (!Array.isArray(ids) || ids.length < 2 || ids.length > MAX_BATCH_REPORTS || new Set(ids).size !== ids.length) {
       throw new Error(`서로 다른 접수 2~${MAX_BATCH_REPORTS}개를 선택해주세요.`);
@@ -126,11 +127,18 @@ export class AutomationController extends EventEmitter {
       if (!ready.codex || !ready.previewWorkflow) throw new Error('Codex 로그인과 GitHub 검사 작업을 먼저 확인해주세요.');
       const at = new Date().toISOString();
       const record = { id: randomUUID(), kind: 'batch', reportIds: [...ids], report: members[0].report, replay: members[0].replay,
-        status: 'fixing', attempts: 1, createdAt: at, audit: [{ at, actor, action: 'request-batch', reportIds: [...ids] }] };
+        status: 'fixing', attempts: 1, createdAt: at, audit: [{ at, actor, action: 'request-batch', reportIds: [...ids] }],
+        ...(metadata.dailyRunDate ? { dailyRunDate: metadata.dailyRunDate, dailyRemaining: metadata.dailyRemaining } : {}) };
       await this.save(record); this.runFix(record); return this.view(record);
     } catch (error) { this.busy = false; throw error; }
   }
   fixReports(record) { return record.kind === 'batch' ? record.reportIds.map(id => this.get(id)) : [record]; }
+  async setAutomatic(id, allowed, actor) {
+    const record = this.get(id);
+    if (typeof allowed !== 'boolean' || record.kind === 'batch') throw new Error('접수의 자동 처리 포함 여부를 확인해주세요.');
+    record.autoProcessExcluded = !allowed; record.audit.push({ at: new Date().toISOString(), actor, action: 'set-automatic', allowed });
+    await this.save(record); return this.view(record);
+  }
   runFix(record) {
     // The owner selects the entire batch before one candidate is generated.
     this.generate(record).catch(async error => { record.status = 'failed'; record.error = this.safeError(error); await this.save(record); }).finally(() => { this.busy = false; });
