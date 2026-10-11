@@ -276,6 +276,7 @@ function SettingsModal({
         {/* Top Close Button */}
         <button
           type="button"
+          aria-label="설정 창 닫기"
           onClick={onClose}
           style={{
             position: 'absolute',
