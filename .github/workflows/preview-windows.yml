@@ -44,6 +44,8 @@ jobs:
         run: npm test
       - name: Frontend checks
         run: npm run lint
+      - name: Build frontend for Tauri context
+        run: npm run build
       - name: Rust regression tests
         working-directory: src-tauri
         run: cargo test --locked
