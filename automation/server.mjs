@@ -33,10 +33,12 @@ export async function createAdminServer(controller, { token = randomBytes(32).to
       for await (const chunk of req) { size += chunk.length; if (size > MAX_DIAGNOSTIC_BYTES) { send(413, { error: '파일 한도 초과' }); req.destroy(); return; } chunks.push(chunk); }
       const input = JSON.parse(Buffer.concat(chunks).toString('utf8'));
       if (url.pathname === '/api/reports') { send(201, await controller.importReport(input)); return; }
-      const match = /^\/api\/reports\/([a-f0-9-]+)\/(fix|refresh|approve|release)$/.exec(url.pathname);
+      if (url.pathname === '/api/batches') { send(201, await controller.startBatch(input.ids, 'local')); return; }
+      const match = /^\/api\/reports\/([a-f0-9-]+)\/(fix|refresh|approve|release|requeue)$/.exec(url.pathname);
       if (!match) { send(404, { error: '찾을 수 없습니다.' }); return; }
       const [, id, action] = match;
       const result = action === 'fix' ? await controller.startFix(id, 'local') : action === 'refresh' ? await controller.refresh(id)
+        : action === 'requeue' ? await controller.returnToQueue(id, 'local')
         : action === 'approve' ? await controller.approveCode(id, { sha: input.sha, patchDigest: input.patchDigest, actor: 'local' })
         : await controller.approveRelease(id, 'local', input.runId);
       send(200, result);
@@ -68,7 +70,7 @@ async function main() {
   let refreshing = false;
   const refreshTimer = setInterval(async () => {
     if (refreshing) return; refreshing = true;
-    try { for (const r of controller.list().filter(r => ['preview-pending', 'release-pending'].includes(r.status))) await controller.refresh(r.id).catch(() => {}); }
+    try { for (const r of controller.list().filter(r => ['preview-pending', 'review-ready', 'release-pending', 'approval-failed'].includes(r.status))) await controller.refresh(r.id).catch(() => {}); }
     finally { refreshing = false; }
   }, 30000);
   const close = async () => { clearInterval(refreshTimer); publicIntake?.close(); await discord?.close(); intake.server.close(); admin.server.close(); };

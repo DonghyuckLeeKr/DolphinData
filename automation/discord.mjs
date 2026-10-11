@@ -1,7 +1,8 @@
-import { Client, GatewayIntentBits, Events, SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from 'discord.js';
+import { Client, GatewayIntentBits, Events, SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags, StringSelectMenuBuilder } from 'discord.js';
 import { authorizeDiscord, isId } from './policy.mjs';
-import { MAX_DIAGNOSTIC_BYTES } from '../src/services/diagnosticService.js';
+import { MAX_DIAGNOSTIC_BYTES, redactDescription } from '../src/services/diagnosticService.js';
 import { discordCard } from './discordCards.mjs';
+import { MAX_BATCH_REPORTS } from './fixRequest.mjs';
 import { readFile, writeFile, rename } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -59,6 +60,7 @@ export async function startDiscord(controller, config, token) {
       const command = new SlashCommandBuilder().setName('dolphin-report').setDescription('돌핀데이터 진단 리포트를 관리자에게 전달합니다')
         .addAttachmentOption(o => o.setName('file').setDescription('앱에서 내보낸 진단 JSON').setRequired(true));
       await client.application.commands.create(command, config.guildId);
+      await client.application.commands.create(new SlashCommandBuilder().setName('dolphin-batch').setDescription('관리자가 접수 여러 건을 선택해 하나의 수정안으로 처리합니다'), config.guildId);
       status.connected = true;
       for (const record of controller.list().filter(r => !['released', 'interrupted'].includes(r.status))) await publish(record);
     } catch { status.error = '봇 초기 설정 실패: 서버·채널·명령어 권한을 확인해주세요.'; }
@@ -82,6 +84,22 @@ export async function startDiscord(controller, config, token) {
         const report = await controller.importReport(Buffer.concat(chunks).toString('utf8'));
         await interaction.editReply(`진단 리포트 ${report.id}를 접수했습니다. 자동 수정은 관리자 승인 후 실행됩니다.`); return;
       }
+      if (interaction.isChatInputCommand() && interaction.commandName === 'dolphin-batch') {
+        if (!authorizeDiscord(interaction, config)) { await interaction.reply({ content: '지정된 관리자 계정만 일괄 처리를 시작할 수 있습니다.', flags: MessageFlags.Ephemeral }); return; }
+        const pending = controller.list().filter(r => r.canRequestFix && r.kind !== 'batch').reverse().slice(0, 25);
+        if (pending.length < 2) { await interaction.reply({ content: '함께 처리할 대기 접수가 2건 이상 필요합니다. 검토 중인 수정안에 연결된 접수는 제외됩니다.', flags: MessageFlags.Ephemeral }); return; }
+        const menu = new StringSelectMenuBuilder().setCustomId('batch-select').setPlaceholder('함께 수정할 접수 2~10건 선택').setMinValues(2).setMaxValues(Math.min(MAX_BATCH_REPORTS, pending.length))
+          .addOptions(pending.map(r => ({ label: `접수 ${r.id.slice(0, 8)} · ${r.report.appVersion}`,
+            description: [...redactDescription(r.report.description)].map(c => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127 || /[\u202a-\u202e\u2066-\u2069]/.test(c) ? ' ' : c).join('').slice(0, 100) || `기록 ${r.report.events.length}개 · ${r.report.symptom}`, value: r.id })));
+        await interaction.reply({ flags: MessageFlags.Ephemeral, content: '최근 대기 접수 중에서 선택하면 자동 수정이 시작됩니다. 선택한 건들은 하나의 수정안으로 묶고, 수정·배포 승인은 별도로 받습니다. 이전 접수와 전체 설명은 관리자 화면에서 확인해주세요.',
+          components: [new ActionRowBuilder().addComponents(menu)] }); return;
+      }
+      if (interaction.isStringSelectMenu() && interaction.customId === 'batch-select') {
+        if (!authorizeDiscord(interaction, config)) { await interaction.reply({ content: '지정된 관리자 계정만 처리할 수 있습니다.', flags: MessageFlags.Ephemeral }); return; }
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const batch = await controller.startBatch(interaction.values, `discord:${interaction.user.id}`);
+        await interaction.editReply(`접수 ${batch.reportIds.length}건의 일괄 수정 ${batch.id}를 시작했습니다. 결과는 새 일괄 수정 카드에서 확인해주세요.`); return;
+      }
       if (!interaction.isButton()) return;
       if (!authorizeDiscord(interaction, config)) { await interaction.reply({ content: '지정된 관리자 계정만 승인할 수 있습니다.', flags: MessageFlags.Ephemeral }); return; }
       const [action, id, expected] = interaction.customId.split(':');
@@ -98,6 +116,7 @@ export async function startDiscord(controller, config, token) {
       }
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       if (action === 'fix') await controller.startFix(id, `discord:${interaction.user.id}`);
+      else if (action === 'requeue') await controller.returnToQueue(id, `discord:${interaction.user.id}`);
       else if (action === 'approve') await controller.approveCode(id, { sha: expected, patchDigest: record.patchDigest, actor: `discord:${interaction.user.id}` });
       else if (action === 'publish') await controller.approveRelease(id, `discord:${interaction.user.id}`, Number(expected));
       else throw new Error('지원하지 않는 요청입니다.');

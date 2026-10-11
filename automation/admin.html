@@ -5,6 +5,7 @@
   <section aria-label="연결 상태" id="connections" class="connections"></section>
   <section class="intake"><div><h2>자동 접수 및 파일 가져오기</h2><p>앱의 ‘문제 접수’로 보낸 기록이 아래 목록과 디스코드에 표시됩니다. 백업 JSON도 가져올 수 있습니다. 자동 수정 요청 시 문제 설명과 익명화한 기록을 AI가 분석합니다. 문제 설명은 공개 GitHub에 올리지 않습니다.</p></div><label class="file-button">백업 파일 선택<input id="file" type="file" accept=".json,application/json"></label></section>
   <p id="message" role="status" aria-live="polite">관리자 연결을 준비하고 있습니다. 이 안내가 계속 보이면 automation 폴더의 Start-Automation.cmd를 실행하고 열린 브라우저를 사용해주세요. HTML 파일 미리보기에서는 접수 목록을 불러올 수 없습니다.</p>
+  <section class="batch-controls" aria-label="접수 모아서 처리"><div><h2>접수 모아서 처리</h2><p>접수는 계속 보관됩니다. 원하는 시점에 2~10건을 선택하면 하나의 수정안·검사 설치파일로 묶습니다. 검토 중인 수정안에 연결된 접수는 선택할 수 없습니다.</p><p id="selection-count" role="status">선택한 접수 0건</p></div><button id="start-batch" disabled>선택한 접수 함께 수정</button></section>
   <section id="reports" aria-label="리포트 목록"><div class="empty">관리자 연결 후 접수 목록이 표시됩니다.</div></section>
   <footer>자동 수정은 검토용 브랜치에서 진행됩니다. 수정 승인 후에도 GitHub 배포 승인이 필요합니다. USB 장치의 실제 동작은 설치파일로 확인해주세요.</footer>
 </main></body></html>

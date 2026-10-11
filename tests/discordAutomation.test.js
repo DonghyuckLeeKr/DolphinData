@@ -28,3 +28,12 @@ test('a no-change result shows its reason and allows retry on the same receipt',
 test('a released report exposes no mutation button', () => {
   assert.equal(discordCard({ ...base, status: 'released' }).components.length, 0);
 });
+
+test('batch cards list every description within Discord limits and members cannot approve separately', () => {
+  const reports = Array.from({ length: 10 }, (_, i) => ({ id: `receipt-${i}`, description: '@everyone ' + '개선 요청 '.repeat(1000) }));
+  const card = discordCard({ ...base, kind: 'batch', reportIds: reports.map(r => r.id), reports, aiSummary: '결과'.repeat(1000), error: '안내'.repeat(1000) });
+  assert.equal(card.embeds[0].fields.length, 12);
+  assert.ok(card.embeds[0].fields.reduce((total, f) => total + f.name.length + f.value.length, 0) < 5800);
+  const member = discordCard({ ...base, status: 'batched', batchId: base.id, batchStatus: 'review-ready' });
+  assert.equal(member.components.length, 0); assert.ok(member.content.includes('일괄 수정'));
+});
