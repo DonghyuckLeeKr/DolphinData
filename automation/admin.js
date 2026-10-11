@@ -1,7 +1,8 @@
 const isLocalAdmin = location.protocol === 'http:' && location.hostname === '127.0.0.1';
 const sessionKey = 'dolphindata-admin-session';
 let token = '';
-if (isLocalAdmin) {
+function readAdminToken() {
+  if (!isLocalAdmin) return;
   const supplied = location.hash.slice(1);
   try {
     if (/^[a-f0-9]{64}$/.test(supplied)) sessionStorage.setItem(sessionKey, supplied);
@@ -9,6 +10,7 @@ if (isLocalAdmin) {
   } catch { token = supplied; }
   history.replaceState(null, '', location.pathname);
 }
+readAdminToken();
 const message = document.querySelector('#message');
 const labels = { received: '리포트 접수', fixing: '자동 수정 중', 'preview-pending': 'Windows 검사 중', 'review-ready': '수정 검토 필요',
   approving: '수정 승인 처리 중', 'release-pending': '배포 승인 대기', released: '배포 완료', failed: '작업 실패', 'release-failed': '배포 실패',
@@ -70,6 +72,7 @@ async function refresh() {
   message.textContent = failures.length ? failures.map(r => r.reason.message).join(' · ') : `리포트 ${records.value.length}개 · ${new Date().toLocaleTimeString('ko-KR')} 확인`;
 }
 document.querySelector('#refresh').onclick = refresh;
+window.addEventListener('hashchange', () => { readAdminToken(); refresh(); });
 document.querySelector('#file').onchange = async event => {
   const file = event.target.files[0]; if (!file) return;
   try { if (!isLocalAdmin || !token) throw new Error('Start-Automation.cmd에서 열린 관리자 화면을 사용해주세요.'); if (file.size > 256 * 1024) throw new Error('256KB 이하의 진단 파일만 가져올 수 있습니다.'); await api('/api/reports', JSON.parse(await file.text())); message.textContent = '리포트를 가져왔습니다.'; await refresh(); }
