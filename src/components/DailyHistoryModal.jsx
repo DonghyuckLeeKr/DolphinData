@@ -67,6 +67,7 @@ function DailyHistoryModal({ config, activeProfile, onClose }) {
         <button
           onClick={onClose}
           type="button"
+          aria-label="일별 캘린더 및 통계 창 닫기"
           style={{
             position: 'absolute',
             top: '18px',
