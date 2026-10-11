@@ -58,7 +58,7 @@ export default function DiagnosticPanel({ config, admin, session = diagnosticSes
       : status.recording ? `기록 중 · ${minutes}분 ${seconds}초 · ${status.eventCount}개 상태`
         : available ? `기록 종료 · ${status.eventCount}개 상태 보관` : '기록 대기 중'}</span>
     {status.truncated && <p style={{ ...small, color: 'var(--text-muted)' }}>기록은 계속되며 최근 240개 상태를 보관합니다. 오래된 상태 일부가 빠졌다는 표시를 리포트에 포함합니다.</p>}
-    <p style={{ ...small, color: 'var(--text-muted)' }}>접수하면 네트워크 상태, Windows·USB 드라이버 버전, 위 설명을 개발자에게 전송합니다. 장치·네트워크 이름과 주소는 별칭으로 바꾸고 사용량은 유무만 포함합니다. 설명에 개인정보가 없는지 확인해주세요.</p>
+    <p style={{ ...small, color: 'var(--text-muted)' }}>접수하면 네트워크 상태, Windows·USB 드라이버 버전, 위 설명을 개발자에게 전송합니다. 개발자가 자동 수정을 요청하면 AI가 설명과 기록을 분석합니다. 장치·네트워크 이름과 주소는 별칭으로 바꾸고 사용량은 유무만 포함합니다. 설명에 개인정보가 없는지 확인해주세요.</p>
     {destination?.mode === 'local' && <p style={small}>이 PC의 접수 서버에 연결되었습니다.</p>}
     {destination?.mode === 'public' && <p style={small}>개발자 접수 서버에 연결되었습니다.</p>}
     {destination?.mode === 'unavailable' && <p style={small}>접수 서버 연결을 확인하지 못했습니다. 접수 시 다시 연결하고, 실패하면 기록을 보관합니다.</p>}

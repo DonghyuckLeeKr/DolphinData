@@ -8,7 +8,7 @@ import { run } from '../automation/process.mjs';
 import { createDiagnosticRecorder } from '../src/services/diagnosticService.js';
 import { DEFAULT_PROFILE } from '../src/services/storageService.js';
 
-test('local candidate pipeline uses real Git, rejects stale approvals and excludes private descriptions', async () => {
+test('local candidate pipeline retries safely, uses descriptions privately and excludes them from publication', async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'dolphin-pipeline-test-'));
   const fixture = path.join(directory, 'source'); await mkdir(path.join(fixture, 'src/services'), { recursive: true });
   await mkdir(path.join(fixture, 'src-tauri')); await mkdir(path.join(fixture, 'tests'));
@@ -27,15 +27,20 @@ test('local candidate pipeline uses real Git, rejects stale approvals and exclud
   const baseSha = await git(['rev-parse', 'HEAD']); const pushTarget = path.join(directory, 'remote.git');
   await run('git', ['init', '--bare', pushTarget]);
   await git(['push', pushTarget, `${baseSha}:refs/heads/main`]);
-  let prompt; let mergeCalled = false;
+  let prompt; let mergeCalled = false; let shouldEdit = false; let prBody;
   const execute = async (file, args, options = {}) => {
-    if (file === 'codex-test') { prompt = options.input; await writeFile(path.join(options.cwd, 'src/services/example.js'), 'export const value = 2;\n'); return 'fake model output'; }
+    if (file === 'codex-test') {
+      prompt = options.input;
+      await writeFile(args[args.indexOf('--output-last-message') + 1], shouldEdit ? '수정안을 만들고 검사를 요청했습니다.' : '개선할 화면을 확인해주세요.');
+      if (shouldEdit) await writeFile(path.join(options.cwd, 'src/services/example.js'), 'export const value = 2;\n');
+      return 'fake model output';
+    }
     if (file === 'gh' && args[0] === 'api') {
       const endpoint = args[1];
       if (endpoint.endsWith('/commits/main')) return JSON.stringify({ sha: baseSha });
       throw new Error(`Unexpected test API ${endpoint}`);
     }
-    if (file === 'gh' && args[0] === 'pr') return 'https://github.com/DonghyuckLeeKr/DolphinData/pull/123';
+    if (file === 'gh' && args[0] === 'pr') { prBody = options.input; return 'https://github.com/DonghyuckLeeKr/DolphinData/pull/123'; }
     if (file === 'git' && args[0] === 'fetch') return run(file, ['fetch', fixture, args[2]], options);
     if (file === 'git' && args.includes('push')) { const safeArgs = args.map(arg => arg === 'https://github.com/DonghyuckLeeKr/DolphinData.git' ? pushTarget : arg); return run(file, safeArgs, options); }
     return run(file, args, options);
@@ -43,9 +48,22 @@ test('local candidate pipeline uses real Git, rejects stale approvals and exclud
   try {
     const controller = new AutomationController({ directory: path.join(directory, 'store'), repositoryRoot: fixture, execute, codex: 'codex-test' }); await controller.init();
     const recorder = createDiagnosticRecorder(); recorder.start({ profiles: [DEFAULT_PROFILE], activeProfileId: DEFAULT_PROFILE.id }); recorder.observe({ connected: false }); recorder.stop();
-    const view = await controller.importReport(recorder.export({ description: 'PRIVATE USER TEXT MUST NOT LEAVE PC', symptom: 'other' }));
-    const record = controller.get(view.id); record.status = 'fixing'; await controller.generate(record);
-    assert.equal(record.status, 'preview-pending'); assert.ok(!prompt.includes('PRIVATE USER TEXT'));
+    const view = await controller.importReport(recorder.export({ description: 'PRIVATE USER TEXT FOR REVIEW ONLY', symptom: 'other' }));
+    const record = controller.get(view.id); record.status = 'fixing'; record.attempts = 1; await controller.generate(record);
+    assert.equal(record.status, 'insufficient-evidence'); assert.equal(record.aiSummary, '개선할 화면을 확인해주세요.');
+    const firstWorkspace = record.workspace;
+    controller.readiness = async () => ({ codex: true, previewWorkflow: true, releaseApproval: true });
+    shouldEdit = true;
+    const completion = new Promise((resolve, reject) => {
+      const changed = r => { if (['preview-pending', 'failed'].includes(r.status)) { controller.off('change', changed); if (r.status === 'failed') reject(new Error(r.error)); else resolve(); } };
+      controller.on('change', changed);
+    });
+    await controller.startFix(record.id, 'test'); await completion;
+    assert.equal(record.status, 'preview-pending'); assert.equal(record.attempts, 2);
+    assert.notEqual(firstWorkspace, record.workspace);
+    assert.ok(prompt.includes('PRIVATE USER TEXT')); assert.ok(prompt.includes('untrusted data'));
+    assert.ok(!prBody.includes('PRIVATE USER TEXT'));
+    assert.equal(controller.list().length, 1); assert.equal(record.audit.filter(a => a.action === 'request-fix').length, 1);
     assert.equal(record.previewTitle, `Preview PR-123 ${record.candidateSha}`);
     const remoteSha = await run('git', ['--git-dir', pushTarget, 'rev-parse', `refs/heads/${record.branch}`]); assert.equal(remoteSha, record.candidateSha);
     const packageData = JSON.parse(await readFile(path.join(record.workspace, 'package.json'), 'utf8')); assert.equal(packageData.version, '1.2.12');

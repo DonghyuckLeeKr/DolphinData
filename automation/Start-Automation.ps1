@@ -15,5 +15,13 @@ try {
         try { $env:DOLPHIN_DISCORD_TOKEN = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($taskTokenPointer) }
         finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($taskTokenPointer) }
     }
-    & node (Join-Path $PSScriptRoot 'server.mjs')
+    $taskAdminOpened = $false
+    & node (Join-Path $PSScriptRoot 'server.mjs') | ForEach-Object {
+        $taskOutputLine = [string]$_
+        Write-Output $taskOutputLine
+        if (!$taskAdminOpened -and $env:DOLPHIN_OPEN_ADMIN -ne '0' -and $taskOutputLine -match 'http://127\.0\.0\.1:4174/#[a-f0-9]{64}') {
+            $taskAdminOpened = $true
+            Start-Process -FilePath $Matches[0]
+        }
+    }
 } finally { Remove-Item Env:\DOLPHIN_DISCORD_TOKEN -ErrorAction SilentlyContinue }
