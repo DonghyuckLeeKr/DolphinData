@@ -86,3 +86,30 @@ test('a closed batch cannot be approved and returning it to the queue preserves 
     assert.ok(reloaded.view(reloaded.get(one.id)).canRequestFix); assert.equal(reloaded.get(record.id).candidateHistory.length, 1);
   } finally { assert.ok(path.resolve(directory).startsWith(path.join(os.tmpdir(), 'dolphin-batch-closed-'))); await rm(directory, { recursive: true, force: true }); }
 });
+
+test('explicit closed batch retry retains member and daily history while archiving the previous candidate', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'dolphin-batch-retry-'));
+  try {
+    const controller = new AutomationController({ directory, repositoryRoot: process.cwd() }); await controller.init();
+    controller.readiness = async () => ({ codex: true, previewWorkflow: true, releaseApproval: true }); controller.generate = async () => {};
+    const one = await controller.importReport(report()); const two = await controller.importReport(report());
+    const batch = await controller.startBatch([one.id, two.id], 'test', { dailyRunDate: '2026-10-11' });
+    while (controller.busy) await new Promise(resolve => setTimeout(resolve, 5));
+    const record = controller.get(batch.id); record.status = 'candidate-closed'; record.candidateSha = 'a'.repeat(40); record.prNumber = 6; record.prUrl = 'https://github.com/DonghyuckLeeKr/DolphinData/pull/6'; record.previewConclusion = 'failure'; await controller.save(record);
+    controller.api = async () => ({ state: 'open', merged_at: null });
+    await assert.rejects(controller.returnToQueue(record.id, 'test', { keepBatch: true })); assert.equal(record.candidateSha, 'a'.repeat(40));
+    controller.api = async () => ({ state: 'closed', merged_at: '2026-10-11' });
+    await assert.rejects(controller.returnToQueue(record.id, 'test', { keepBatch: true }));
+    controller.api = async () => ({ state: 'closed', merged_at: null });
+    await controller.returnToQueue(record.id, 'test', { keepBatch: true });
+    assert.equal(record.status, 'received'); assert.equal(record.dailyRunDate, '2026-10-11'); assert.equal(record.candidateSha, undefined);
+    assert.equal(record.candidateHistory[0].candidateSha, 'a'.repeat(40));
+    assert.equal(controller.view(controller.get(one.id)).batchId, batch.id); assert.equal(controller.view(controller.get(one.id)).canRequestFix, false);
+    await controller.startFix(batch.id, 'test'); assert.equal(record.attempts, 2);
+    while (controller.busy) await new Promise(resolve => setTimeout(resolve, 5));
+    assert.deepEqual(record.reportIds, [one.id, two.id]);
+    const reloaded = new AutomationController({ directory, repositoryRoot: process.cwd() }); await reloaded.init();
+    assert.equal(reloaded.view(reloaded.get(one.id)).batchId, batch.id); assert.equal(reloaded.get(batch.id).dailyRunDate, '2026-10-11');
+    await assert.rejects(controller.returnToQueue(one.id, 'test', { keepBatch: true }));
+  } finally { assert.ok(path.resolve(directory).startsWith(path.join(os.tmpdir(), 'dolphin-batch-retry-'))); await rm(directory, { recursive: true, force: true }); }
+});

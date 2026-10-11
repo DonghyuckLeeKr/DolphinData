@@ -293,8 +293,9 @@ export class AutomationController extends EventEmitter {
     finally { this.busy = false; }
     return this.view(r);
   }
-  async returnToQueue(id, actor) {
+  async returnToQueue(id, actor, { keepBatch = false } = {}) {
     const r = this.get(id);
+    if (keepBatch && r.kind !== 'batch') throw new Error('같은 묶음 재시도는 일괄 수정에만 사용할 수 있습니다.');
     if (this.busy || r.status !== 'candidate-closed' || r.releaseSha) throw new Error('닫힌 수정안만 접수 대기로 돌릴 수 있습니다.');
     this.busy = true;
     try {
@@ -305,8 +306,8 @@ export class AutomationController extends EventEmitter {
         if (r[key] !== undefined) { previous[key] = r[key]; delete r[key]; }
       }
       (r.candidateHistory ||= []).push(previous);
-      r.status = r.kind === 'batch' ? 'retired' : 'received'; r.error = '';
-      r.audit.push({ at: new Date().toISOString(), actor, action: 'return-to-queue', previousSha: previous.candidateSha });
+      r.status = r.kind === 'batch' && !keepBatch ? 'retired' : 'received'; r.error = '';
+      r.audit.push({ at: new Date().toISOString(), actor, action: 'return-to-queue', previousSha: previous.candidateSha, keepBatch });
       await this.save(r); return this.view(r);
     } finally { this.busy = false; }
   }

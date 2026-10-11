@@ -41,9 +41,13 @@ export async function createAdminServer(controller, { token = randomBytes(32).to
       if (url.pathname === '/api/daily-config' && daily) { send(200, await daily.configure(input)); return; }
       if (url.pathname === '/api/reports') { send(201, await controller.importReport(input)); return; }
       if (url.pathname === '/api/batches') { send(201, await controller.startBatch(input.ids, 'local')); return; }
-      const match = /^\/api\/reports\/([a-f0-9-]+)\/(fix|refresh|approve|release|requeue|automatic)$/.exec(url.pathname);
+      const match = /^\/api\/reports\/([a-f0-9-]+)\/(fix|refresh|approve|release|requeue|retry|automatic)$/.exec(url.pathname);
       if (!match) { send(404, { error: '찾을 수 없습니다.' }); return; }
       const [, id, action] = match;
+      if (action === 'retry') {
+        await controller.returnToQueue(id, 'local', { keepBatch: true });
+        send(200, await controller.startFix(id, 'local')); return;
+      }
       const result = action === 'fix' ? await controller.startFix(id, 'local') : action === 'refresh' ? await controller.refresh(id)
         : action === 'requeue' ? await controller.returnToQueue(id, 'local')
         : action === 'automatic' ? await controller.setAutomatic(id, input.allowed, 'local')
@@ -79,7 +83,7 @@ async function main() {
   let refreshing = false;
   const refreshTimer = setInterval(async () => {
     if (refreshing) return; refreshing = true;
-    try { for (const r of controller.list().filter(r => ['preview-pending', 'review-ready', 'release-pending', 'approval-failed'].includes(r.status))) await controller.refresh(r.id).catch(() => {}); }
+    try { for (const r of controller.list().filter(r => ['preview-pending', 'review-ready', 'release-pending', 'approval-failed'].includes(r.status) || (r.status === 'failed' && r.prNumber))) await controller.refresh(r.id).catch(() => {}); }
     finally { refreshing = false; }
   }, 30000);
   const close = async () => { clearInterval(refreshTimer); publicIntake?.close(); await discord?.close(); intake.server.close(); admin.server.close(); };

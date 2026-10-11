@@ -31,6 +31,7 @@ export function discordCard(record) {
   link('함께 처리한 수정안 확인', record.batchPrUrl);
   link('변경 내용 확인', record.prUrl); link('검사·설치파일 확인', record.previewUrl);
   if (record.status === 'candidate-closed') button('접수 대기로 돌리기', `requeue:${record.id}`);
+  if (record.status === 'candidate-closed' && record.kind === 'batch') button('같은 묶음 다시 수정', `retry:${record.id}`);
   if (record.status === 'review-ready') button('수정 승인 절차', `review:${record.id}:${record.candidateSha}`, 3);
   if (record.status === 'release-pending' && record.releaseRunId) {
     link('배포 상태 확인', record.releaseUrl); button('배포 승인 절차', `release:${record.id}:${record.releaseRunId}`, 3);

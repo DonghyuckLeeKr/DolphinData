@@ -90,7 +90,8 @@ function renderReports(records) {
     if (r.status === 'review-ready') button('수정 검토 완료 · 승인', 'approve', { sha: r.candidateSha, patchDigest: r.patchDigest }, `변경 내용과 검사 설치파일을 확인했나요?\n승인한 수정본을 main에 병합합니다.\n코드: ${r.candidateSha}\n배포 승인은 별도로 필요합니다.`);
     if (r.status === 'release-pending' && r.releaseRunId) button('이 버전 배포 승인', 'release', { runId: r.releaseRunId }, `코드 ${r.releaseSha}의 서명된 설치파일을 빌드하고 사용자에게 배포합니다. 승인할까요?`);
     if (r.status === 'candidate-closed') button('접수 대기로 돌리기', 'requeue');
-    if (['preview-pending', 'review-ready', 'release-pending', 'approval-failed'].includes(r.status)) button('검사 상태 확인', 'refresh');
+    if (r.status === 'candidate-closed' && r.kind === 'batch') button('같은 묶음 다시 수정', 'retry');
+    if (['preview-pending', 'review-ready', 'release-pending', 'approval-failed'].includes(r.status) || (r.status === 'failed' && r.prNumber)) button('검사 상태 확인', 'refresh');
     card.append(actions); target.append(card);
   }
 }
