@@ -57,7 +57,8 @@ jobs:
           tagName: v__VERSION__
           releaseName: DolphinData v__VERSION__
           releaseBody: |
-            설정 화면에 현재 설치 버전과 개발자 문의 이메일을 추가했습니다.
+            USB 라우터의 재연결 및 연결 해제 시 네트워크 분류를 안정화했습니다.
+            설정 화면에서 필요할 때 관리자 권한으로 다시 실행할 수 있습니다.
             서명된 Windows 자동 업데이트 번들과 설치 파일을 제공합니다.
           releaseDraft: false
           prerelease: false

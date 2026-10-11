@@ -7,7 +7,7 @@ use data_usage_counter::telemetry::{NetworkSampler, TelemetryData};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use sysinfo::{Pid, System};
 use tauri::{
     CustomMenuItem, LogicalSize, Manager, State, SystemTray, SystemTrayEvent, SystemTrayMenu,
@@ -19,8 +19,13 @@ use std::os::windows::process::CommandExt;
 
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::{
-    Foundation::{CloseHandle, GetLastError, ERROR_ALREADY_EXISTS, WAIT_OBJECT_0},
-    System::Threading::{CreateEventW, CreateMutexW, SetEvent, WaitForSingleObject, INFINITE},
+    Foundation::{CloseHandle, GetLastError, ERROR_ALREADY_EXISTS, ERROR_CANCELLED, WAIT_OBJECT_0},
+    Security::{GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY},
+    System::Threading::{
+        CreateEventW, CreateMutexW, GetCurrentProcess, OpenProcessToken, SetEvent,
+        WaitForSingleObject, INFINITE,
+    },
+    UI::Shell::{ShellExecuteExW, SEE_MASK_NOASYNC, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW},
 };
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
@@ -30,6 +35,9 @@ const INSTANCE_MUTEX_NAME: &str = "Local\\DolphinData.com.datausage.counter.inst
 
 #[cfg(target_os = "windows")]
 const INSTANCE_EVENT_NAME: &str = "Local\\DolphinData.com.datausage.counter.show";
+
+#[cfg(target_os = "windows")]
+const ELEVATED_RELAUNCH_ARG: &str = "--dolphindata-elevated-relaunch";
 
 #[cfg(target_os = "windows")]
 struct SingleInstanceGuard {
@@ -53,28 +61,104 @@ fn wide_null(value: &str) -> Vec<u16> {
 }
 
 #[cfg(target_os = "windows")]
-fn acquire_single_instance() -> Result<Option<SingleInstanceGuard>, String> {
+fn acquire_single_instance(elevated_relaunch: bool) -> Result<Option<SingleInstanceGuard>, String> {
     let mutex_name = wide_null(INSTANCE_MUTEX_NAME);
     let event_name = wide_null(INSTANCE_EVENT_NAME);
-    unsafe {
-        let mutex = CreateMutexW(std::ptr::null(), 0, mutex_name.as_ptr());
-        if mutex == 0 {
-            return Err("앱 단일 실행 잠금을 만들지 못했습니다.".to_string());
+    for attempt in 0..100 {
+        unsafe {
+            let mutex = CreateMutexW(std::ptr::null(), 0, mutex_name.as_ptr());
+            if mutex == 0 {
+                return Err("앱 단일 실행 잠금을 만들지 못했습니다.".to_string());
+            }
+            let already_running = GetLastError() == ERROR_ALREADY_EXISTS;
+            if already_running && elevated_relaunch {
+                CloseHandle(mutex);
+                if attempt == 99 {
+                    return Err(
+                        "기존 앱이 종료되지 않아 관리자 권한으로 다시 열지 못했습니다.".to_string(),
+                    );
+                }
+                std::thread::sleep(Duration::from_millis(100));
+                continue;
+            }
+            let event = CreateEventW(std::ptr::null(), 0, 0, event_name.as_ptr());
+            if event == 0 {
+                CloseHandle(mutex);
+                return Err("기존 앱 창 복원 신호를 만들지 못했습니다.".to_string());
+            }
+            if already_running {
+                let _ = SetEvent(event);
+                CloseHandle(event);
+                CloseHandle(mutex);
+                return Ok(None);
+            }
+            return Ok(Some(SingleInstanceGuard { mutex, event }));
         }
-        let already_running = GetLastError() == ERROR_ALREADY_EXISTS;
-        let event = CreateEventW(std::ptr::null(), 0, 0, event_name.as_ptr());
-        if event == 0 {
-            CloseHandle(mutex);
-            return Err("기존 앱 창 복원 신호를 만들지 못했습니다.".to_string());
-        }
-        if already_running {
-            let _ = SetEvent(event);
-            CloseHandle(event);
-            CloseHandle(mutex);
-            return Ok(None);
-        }
-        Ok(Some(SingleInstanceGuard { mutex, event }))
     }
+    unreachable!()
+}
+
+#[cfg(target_os = "windows")]
+#[tauri::command]
+fn is_running_as_admin() -> Result<bool, String> {
+    unsafe {
+        let mut token = 0;
+        if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) == 0 {
+            return Err(format!(
+                "관리자 권한 확인에 실패했습니다: {}",
+                GetLastError()
+            ));
+        }
+        let mut elevation = TOKEN_ELEVATION { TokenIsElevated: 0 };
+        let mut returned = 0;
+        let result = GetTokenInformation(
+            token,
+            TokenElevation,
+            &mut elevation as *mut _ as *mut _,
+            std::mem::size_of::<TOKEN_ELEVATION>() as u32,
+            &mut returned,
+        );
+        let error = GetLastError();
+        CloseHandle(token);
+        if result == 0 {
+            return Err(format!("관리자 권한 확인에 실패했습니다: {error}"));
+        }
+        Ok(elevation.TokenIsElevated != 0)
+    }
+}
+
+#[cfg(target_os = "windows")]
+#[tauri::command]
+fn relaunch_as_admin() -> Result<(), String> {
+    if is_running_as_admin()? {
+        return Ok(());
+    }
+    let exe = std::env::current_exe().map_err(|error| error.to_string())?;
+    let exe = wide_null(&exe.to_string_lossy());
+    let verb = wide_null("runas");
+    let parameters = wide_null(ELEVATED_RELAUNCH_ARG);
+    let mut launch: SHELLEXECUTEINFOW = unsafe { std::mem::zeroed() };
+    launch.cbSize = std::mem::size_of::<SHELLEXECUTEINFOW>() as u32;
+    launch.fMask = SEE_MASK_NOASYNC | SEE_MASK_NOCLOSEPROCESS;
+    launch.lpVerb = verb.as_ptr();
+    launch.lpFile = exe.as_ptr();
+    launch.lpParameters = parameters.as_ptr();
+    launch.nShow = 1;
+    unsafe {
+        if ShellExecuteExW(&mut launch) == 0 {
+            let error = GetLastError();
+            return Err(if error == ERROR_CANCELLED {
+                "관리자 권한 요청이 취소되었습니다. 현재 앱은 계속 실행됩니다.".to_string()
+            } else {
+                format!("관리자 권한으로 앱을 열지 못했습니다. Windows 오류: {error}")
+            });
+        }
+        if launch.hProcess != 0 {
+            CloseHandle(launch.hProcess);
+        }
+    }
+    // The new process waits for this process to release its single-instance mutex.
+    std::process::exit(0);
 }
 
 #[cfg(target_os = "windows")]
@@ -350,7 +434,9 @@ fn get_realtime_stats(target_interface: String, state: State<AppState>) -> Telem
 
 fn main() {
     #[cfg(target_os = "windows")]
-    let single_instance_guard = match acquire_single_instance() {
+    let single_instance_guard = match acquire_single_instance(
+        std::env::args_os().any(|arg| arg == ELEVATED_RELAUNCH_ARG),
+    ) {
         Ok(Some(guard)) => guard,
         Ok(None) => return,
         Err(error) => {
@@ -449,7 +535,9 @@ fn main() {
             set_mini_mode,
             update_tray_tooltip,
             set_auto_start,
-            get_auto_start
+            get_auto_start,
+            is_running_as_admin,
+            relaunch_as_admin
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,6 +1,6 @@
 [package]
 name = "data-usage-counter"
-version = "1.2.8"
+version = "1.2.11"
 description = "Dolphin Data - Real-time Network & LTE Data Monitor"
 authors = ["DolphinData contributors"]
 edition = "2021"
@@ -27,9 +27,12 @@ sysinfo = "0.30"
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.48", features = [
   "Win32_Foundation",
+  "Win32_Security",
   "Win32_System_Diagnostics_Etw",
+  "Win32_System_Registry",
   "Win32_System_Threading",
-  "Win32_System_Time"
+  "Win32_System_Time",
+  "Win32_UI_Shell"
 ] }
 
 [features]

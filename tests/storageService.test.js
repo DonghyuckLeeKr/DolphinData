@@ -151,3 +151,76 @@ test('daily history is limited to known profiles and the newest bounded entries'
   assert.equal(Object.keys(config.dailyHistoryByProfile['profile-1']).length, MAX_DAILY_HISTORY_ENTRIES);
   assert.equal(config.dailyHistoryByProfile.unknown, undefined);
 });
+
+test('only empty unbound generic placeholders are removed on load', () => {
+  const config = normalizeConfig({
+    activeProfileId: 'profile-dummy-74',
+    profiles: [
+      {
+        id: 'profile-1',
+        name: '모바일 데이터 요금제',
+        profileOrigin: 'manual',
+        needsRegistration: false,
+        sessionBytes: 500000000
+      },
+      {
+        id: 'profile-dummy-identifying',
+        name: '식별 중... (정보 등록 필요)',
+        profileOrigin: 'auto-network',
+        needsRegistration: true,
+        sessionBytes: 0
+      },
+      {
+        id: 'profile-dummy-74',
+        name: '네트워크 74 (정보 등록 필요)',
+        profileOrigin: 'auto-network',
+        needsRegistration: true,
+        sessionBytes: 1600000000,
+        initialBaselineGB: 4
+      },
+      {
+        id: 'profile-dummy-75',
+        name: '네트워크 75 (정보 등록 필요)',
+        profileOrigin: 'auto-network',
+        needsRegistration: true,
+        sessionBytes: 0
+      }
+    ],
+    networkBindings: [
+      {
+        fingerprint: 'network-v1-74',
+        networkName: '네트워크 74',
+        profileId: 'profile-dummy-74',
+        meteringMode: 'metered'
+      }
+    ],
+    dailyHistoryByProfile: {
+      'profile-dummy-74': { '2026-09-28': 1600000000 }
+    }
+  });
+
+  assert.equal(config.profiles.length, 2);
+  assert.equal(config.profiles[0].id, 'profile-1');
+  assert.equal(config.profiles[0].sessionBytes, 500000000);
+  assert.equal(config.profiles[1].id, 'profile-dummy-74');
+  assert.equal(config.profiles[1].sessionBytes, 1600000000);
+  assert.equal(config.profiles[1].initialBaselineGB, 4);
+  assert.equal(config.activeProfileId, 'profile-dummy-74');
+  assert.equal(config.networkBindings[0].profileId, 'profile-dummy-74');
+  assert.equal(config.dailyHistoryByProfile['profile-dummy-74']['2026-09-28'], 1600000000);
+});
+
+test('unbound placeholder with recorded usage is retained without moving it to another plan', () => {
+  const config = normalizeConfig({
+    activeProfileId: 'profile-1',
+    profiles: [
+      { id: 'profile-1', name: 'Main', sessionBytes: 50 },
+      { id: 'network-unused', name: '네트워크 75', profileOrigin: 'auto-network', needsRegistration: true, sessionBytes: 200 }
+    ],
+    networkBindings: []
+  });
+
+  assert.equal(config.profiles.length, 2);
+  assert.equal(config.profiles[0].sessionBytes, 50);
+  assert.equal(config.profiles[1].sessionBytes, 200);
+});

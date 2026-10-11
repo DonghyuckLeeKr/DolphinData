@@ -15,10 +15,12 @@ import {
   fetchCurrentNetworkIdentity,
   fetchRealtimeStats,
   isTauriAvailable,
+  relaunchAsAdmin,
   setWindowMiniMode,
   updateTrayTooltip
 } from './services/networkTelemetry';
-import { getActiveNetworkBinding, reconcileNetworkProfile, updateNetworkBinding } from './services/networkProfileService';
+import { disconnectNetworkProfile, getActiveNetworkBinding, reconcileNetworkProfile, updateNetworkBinding } from './services/networkProfileService';
+import { advanceNetworkObservation } from './services/networkObservation';
 import { checkAndNotifyThresholds, checkAndNotifyDailySurge } from './services/notificationService';
 import { formatSpeed } from './utils/formatters';
 import Header from './components/Header';
@@ -61,6 +63,7 @@ export default function App() {
   // useRef to always hold the latest config without re-creating intervals
   const configRef = useRef(config);
   const lastNetworkFingerprintRef = useRef('');
+  const networkObservationRef = useRef({ fingerprint: '', count: 0, confirmed: false });
   const networkDetectionInFlightRef = useRef(false);
   const updateCheckStartedRef = useRef(false);
   useEffect(() => {
@@ -147,15 +150,28 @@ export default function App() {
       networkDetectionInFlightRef.current = true;
       try {
         const identity = await fetchCurrentNetworkIdentity();
-        const fingerprint = identity?.connected ? (identity.fingerprint || '') : '';
+        const observation = advanceNetworkObservation(networkObservationRef.current, identity);
+        networkObservationRef.current = observation;
+        const fingerprint = observation.fingerprint;
         if (!fingerprint) {
           lastNetworkFingerprintRef.current = '';
+          setPendingNetworkFingerprint('');
+          setConfig(prev => {
+            const disconnected = disconnectNetworkProfile(prev);
+            if (disconnected !== prev) saveConfig(disconnected);
+            return disconnected;
+          });
           return;
         }
+        if (!observation.confirmed) return;
+        setPendingNetworkFingerprint(previous => previous && previous !== fingerprint ? '' : previous);
         if (fingerprint === lastNetworkFingerprintRef.current) return;
 
-        const isNewNetwork = !(configRef.current.networkBindings || [])
-          .some(binding => binding.fingerprint === fingerprint);
+        const resolution = reconcileNetworkProfile(configRef.current, identity);
+        const isNewNetwork = resolution.action === 'created';
+        if (resolution.replacedFingerprint) {
+          setPendingNetworkFingerprint(previous => previous === resolution.replacedFingerprint ? fingerprint : previous);
+        }
         lastNetworkFingerprintRef.current = fingerprint;
         setConfig(prev => {
           const result = reconcileNetworkProfile(prev, identity);
@@ -251,6 +267,10 @@ export default function App() {
           if (addedBytes > 0 && meteredProfileId) {
             setConfig(prev => {
               const rolledConfig = rolloverBillingCycles(prev);
+              const stillActive = getActiveNetworkBinding(rolledConfig);
+              if (stillActive?.fingerprint !== currentBinding?.fingerprint
+                || stillActive?.meteringMode !== 'metered'
+                || stillActive.profileId !== meteredProfileId) return rolledConfig;
               const targetProfileId = (rolledConfig.profiles || []).some(profile => profile.id === meteredProfileId)
                 ? meteredProfileId
                 : '';
@@ -324,6 +344,16 @@ export default function App() {
       saveConfig(updated); // Immediate save for explicit user actions
       return updated;
     });
+  }, []);
+
+  const handleRunAsAdmin = useCallback(async ({ configUpdates, bindingUpdates }) => {
+    let updated = { ...configRef.current, ...configUpdates };
+    if (bindingUpdates) updated = updateNetworkBinding(updated, bindingUpdates);
+    configRef.current = updated;
+    saveConfig(updated);
+    setConfig(updated);
+    pendingSaveRef.current = false;
+    await relaunchAsAdmin();
   }, []);
 
   const handleUpdateActiveProfile = useCallback((profilePartial) => {
@@ -403,8 +433,21 @@ export default function App() {
   }, []);
 
   const handleCloseNetworkClassification = useCallback(() => {
+    if (pendingNetworkFingerprint) {
+      setConfig(prev => {
+        const mainProfile = (prev.profiles || []).find(p => !p.needsRegistration) || prev.profiles?.[0];
+        const updated = updateNetworkBinding(prev, {
+          fingerprint: pendingNetworkFingerprint,
+          meteringMode: 'unclassified',
+          profileId: mainProfile?.id || ''
+        });
+        if (updated === prev) return prev;
+        saveConfig(updated);
+        return updated;
+      });
+    }
     setPendingNetworkFingerprint('');
-  }, []);
+  }, [pendingNetworkFingerprint]);
 
   const handleOpenCalibrationFromMini = useCallback(() => {
     setConfig(prev => {
@@ -551,6 +594,7 @@ export default function App() {
           activeProfile={activeProfile}
           networkBinding={activeNetworkBinding}
           onSave={handleUpdateConfig}
+          onRunAsAdmin={handleRunAsAdmin}
           onSaveNetworkBinding={handleUpdateNetworkBinding}
           onImportConfig={(newConfig) => {
             const normalized = rolloverBillingCycles(normalizeConfig(newConfig));
@@ -567,6 +611,7 @@ export default function App() {
           profiles={config.profiles || []}
           onSave={handleUpdateNetworkBinding}
           onClose={handleCloseNetworkClassification}
+          onSaved={() => setPendingNetworkFingerprint('')}
         />
       )}
 

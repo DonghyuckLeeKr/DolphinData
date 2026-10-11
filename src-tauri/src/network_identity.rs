@@ -30,6 +30,8 @@ struct WindowsNetworkSnapshot {
     connection_type: Option<String>,
     gateway_ip: Option<String>,
     gateway_mac: Option<String>,
+    adapter_mac: Option<String>,
+    pnp_device_id: Option<String>,
 }
 
 fn normalize_component(value: Option<String>) -> String {
@@ -54,12 +56,38 @@ fn stable_fingerprint(source: &str) -> String {
     format!("network-v1-{hash:016x}")
 }
 
+fn is_transient_name(name: &str) -> bool {
+    let lower = name.trim().to_lowercase();
+    lower.is_empty()
+        || lower.contains("식별 중")
+        || lower.contains("identifying")
+        || lower == "unknown"
+}
+
+fn is_generic_network_name(name: &str) -> bool {
+    let lower = name.trim().to_lowercase();
+    if lower == "네트워크" || lower == "network" {
+        return true;
+    }
+    if let Some(rest) = lower.strip_prefix("네트워크 ") {
+        return rest.chars().all(|c| c.is_ascii_digit());
+    }
+    if let Some(rest) = lower.strip_prefix("network ") {
+        return rest.chars().all(|c| c.is_ascii_digit());
+    }
+    false
+}
+
 fn build_identity(snapshot: WindowsNetworkSnapshot) -> NetworkIdentity {
     if !snapshot.connected {
         return NetworkIdentity::default();
     }
 
     let network_name = snapshot.network_name.unwrap_or_default().trim().to_string();
+    if is_transient_name(&network_name) {
+        return NetworkIdentity::default();
+    }
+
     let interface_name = snapshot
         .interface_name
         .unwrap_or_default()
@@ -77,10 +105,34 @@ fn build_identity(snapshot: WindowsNetworkSnapshot) -> NetworkIdentity {
         .to_string();
     let gateway_ip = snapshot.gateway_ip.unwrap_or_default().trim().to_string();
     let gateway_mac = normalize_mac(snapshot.gateway_mac);
+    let adapter_mac = normalize_mac(snapshot.adapter_mac);
+    let pnp_device_id = normalize_component(snapshot.pnp_device_id);
     let normalized_network_name = network_name.to_lowercase();
 
-    let (identity_kind, source) = if gateway_mac.len() == 12 {
+    // USB router gateway MACs can rotate on every reconnect. Windows keeps the
+    // USB device's PnP ID stable when the same device is reconnected.
+    // The raw PnP ID is only used to derive the local fingerprint.
+    let (identity_kind, source) = if pnp_device_id.starts_with("usb\\") && !gateway_ip.is_empty() {
+        (
+            "usb-device",
+            format!("usb-device:{pnp_device_id}:{gateway_ip}"),
+        )
+    } else if gateway_mac.len() == 12 {
         ("gateway-mac", format!("gateway-mac:{gateway_mac}"))
+    } else if !is_generic_network_name(&normalized_network_name)
+        && !normalized_network_name.is_empty()
+    {
+        (
+            "network-name",
+            format!("network-name:{normalized_network_name}"),
+        )
+    } else if adapter_mac.len() == 12 && !gateway_ip.is_empty() {
+        (
+            "adapter-gateway",
+            format!("adapter-gateway:{adapter_mac}:{gateway_ip}"),
+        )
+    } else if adapter_mac.len() == 12 {
+        ("adapter-mac", format!("adapter-mac:{adapter_mac}"))
     } else if !normalized_network_name.is_empty() {
         (
             "network-name",
@@ -112,7 +164,8 @@ $ErrorActionPreference = 'SilentlyContinue'
 $candidates = @()
 foreach ($profile in @(Get-NetConnectionProfile)) {
   $adapter = Get-NetAdapter -InterfaceIndex $profile.InterfaceIndex -ErrorAction SilentlyContinue
-  if ($null -ne $adapter -and $adapter.Status -eq 'Up' -and $adapter.HardwareInterface) {
+  if ($null -ne $adapter -and $adapter.Status -eq 'Up' -and $adapter.HardwareInterface -and
+      ($profile.IPv4Connectivity -eq 'Internet' -or $profile.IPv6Connectivity -eq 'Internet')) {
     $rank = if ($profile.IPv4Connectivity -eq 'Internet') { 0 } elseif ($profile.IPv6Connectivity -eq 'Internet') { 1 } else { 2 }
     $candidates += [pscustomobject]@{ Profile = $profile; Adapter = $adapter; Rank = $rank }
   }
@@ -128,7 +181,11 @@ $ipConfig = Get-NetIPConfiguration -InterfaceIndex $profile.InterfaceIndex -Erro
 $gateway = @($ipConfig.IPv4DefaultGateway | Select-Object -ExpandProperty NextHop -ErrorAction SilentlyContinue)[0]
 $gatewayMac = ''
 if ($gateway) {
-  $neighbor = Get-NetNeighbor -InterfaceIndex $profile.InterfaceIndex -IPAddress $gateway -ErrorAction SilentlyContinue | Where-Object { $_.State -ne 'Incomplete' } | Select-Object -First 1
+  $neighbor = Get-NetNeighbor -InterfaceIndex $profile.InterfaceIndex -IPAddress $gateway -ErrorAction SilentlyContinue | Where-Object { $_.State -ne 'Incomplete' -and $_.LinkLayerAddress -ne '' } | Select-Object -First 1
+  if ($null -eq $neighbor) {
+    Test-Connection -TargetName $gateway -Count 1 -TimeoutSeconds 1 -Quiet -ErrorAction SilentlyContinue | Out-Null
+    $neighbor = Get-NetNeighbor -InterfaceIndex $profile.InterfaceIndex -IPAddress $gateway -ErrorAction SilentlyContinue | Where-Object { $_.State -ne 'Incomplete' -and $_.LinkLayerAddress -ne '' } | Select-Object -First 1
+  }
   if ($null -ne $neighbor) { $gatewayMac = [string]$neighbor.LinkLayerAddress }
 }
 [pscustomobject]@{
@@ -139,6 +196,8 @@ if ($gateway) {
   connectionType = [string]$adapter.MediaType
   gatewayIp = [string]$gateway
   gatewayMac = $gatewayMac
+  adapterMac = [string]$adapter.MacAddress
+  pnpDeviceId = [string]$adapter.PnPDeviceID
 } | ConvertTo-Json -Compress
 "#;
 
@@ -176,6 +235,8 @@ mod tests {
             connection_type: Some("Native 802.11".to_string()),
             gateway_ip: Some("192.168.219.1".to_string()),
             gateway_mac: Some(gateway_mac.to_string()),
+            adapter_mac: None,
+            pnp_device_id: None,
         }
     }
 
@@ -198,11 +259,67 @@ mod tests {
     }
 
     #[test]
+    fn usb_router_keeps_its_identity_when_windows_name_and_gateway_mac_change() {
+        let mut first = snapshot("5C-E8-D3-0E-1F-75", "네트워크 75");
+        first.gateway_ip = Some("192.168.0.1".to_string());
+        first.pnp_device_id = Some("USB\\VID_19D2&PID_1557&MI_00\\7&23391696&0&0000".to_string());
+        let mut second = snapshot("32-29-5F-C9-19-F2", "네트워크 76");
+        second.gateway_ip = Some("192.168.0.1".to_string());
+        second.pnp_device_id = Some("usb\\vid_19d2&pid_1557&mi_00\\7&23391696&0&0000".to_string());
+
+        let before = build_identity(first);
+        let after = build_identity(second);
+        assert_eq!(before.identity_kind, "usb-device");
+        assert_eq!(before.fingerprint, after.fingerprint);
+    }
+
+    #[test]
+    fn different_usb_devices_have_different_fingerprints() {
+        let mut first = snapshot("", "네트워크 75");
+        first.pnp_device_id = Some("USB\\VID_19D2&PID_1557\\DEVICE_A".to_string());
+        let mut second = snapshot("", "네트워크 76");
+        second.pnp_device_id = Some("USB\\VID_19D2&PID_1557\\DEVICE_B".to_string());
+
+        assert_ne!(
+            build_identity(first).fingerprint,
+            build_identity(second).fingerprint
+        );
+    }
+
+    #[test]
     fn network_name_is_a_fallback_when_gateway_mac_is_unavailable() {
         let identity = build_identity(snapshot("", "My Phone"));
 
         assert!(identity.connected);
         assert_eq!(identity.identity_kind, "network-name");
         assert!(!identity.fingerprint.is_empty());
+    }
+
+    #[test]
+    fn transient_identifying_states_are_ignored() {
+        let identifying_kr = snapshot("", "식별 중...");
+        let identifying_en = snapshot("", "identifying...");
+
+        assert!(!build_identity(identifying_kr).connected);
+        assert!(!build_identity(identifying_en).connected);
+    }
+
+    #[test]
+    fn generic_network_name_falls_back_to_adapter_mac_and_gateway() {
+        let mut snap1 = snapshot("", "네트워크 74");
+        snap1.adapter_mac = Some("34-4B-50-00-00-00".to_string());
+        snap1.gateway_ip = Some("192.168.0.1".to_string());
+
+        let mut snap2 = snapshot("", "네트워크 75");
+        snap2.adapter_mac = Some("34-4b-50-00-00-00".to_string());
+        snap2.gateway_ip = Some("192.168.0.1".to_string());
+
+        let first = build_identity(snap1);
+        let second = build_identity(snap2);
+
+        assert!(first.connected);
+        assert!(second.connected);
+        assert_eq!(first.identity_kind, "adapter-gateway");
+        assert_eq!(first.fingerprint, second.fingerprint);
     }
 }

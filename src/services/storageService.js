@@ -218,6 +218,34 @@ export const normalizeConfig = (input) => {
     throw new Error('유효한 요금제 프로필이 없습니다.');
   }
 
+  // Only prune empty placeholders with no network binding. Bound profiles and
+  // profiles with usage may represent a separate plan, even with a generic name.
+  const boundProfileIds = new Set(Array.isArray(input.networkBindings)
+    ? input.networkBindings.map(binding => binding?.profileId)
+    : []);
+  const hasEstablishedProfile = profiles.some(profile => profile.profileOrigin !== 'auto-network' || !profile.needsRegistration);
+  const isGenericAutoPlaceholder = (p) => {
+    if (!Array.isArray(input.networkBindings) || !hasEstablishedProfile || boundProfileIds.has(p.id)) return false;
+    if (p.profileOrigin !== 'auto-network' || !p.needsRegistration) return false;
+    if (p.initialBaselineGB > 0 || p.sessionBytes > 0) return false;
+    if (Object.keys(normalizeHistoryEntries(input.dailyHistoryByProfile?.[p.id])).length > 0) return false;
+    const cleanName = (p.name || '')
+      .replace(/\s*\(정보\s*등록\s*필요\)/gi, '')
+      .replace(/\s*\(needs\s*registration\)/gi, '')
+      .trim()
+      .toLowerCase();
+    return (
+      !cleanName ||
+      cleanName.startsWith('식별 중') ||
+      cleanName.startsWith('identifying') ||
+      /^네트워크( \d+)?$/.test(cleanName) ||
+      /^network( \d+)?$/.test(cleanName) ||
+      /^새 네트워크( \d+)?$/.test(cleanName)
+    );
+  };
+
+  profiles = profiles.filter(profile => !isGenericAutoPlaceholder(profile));
+
   const profileIds = new Set(profiles.map(profile => profile.id));
   const activeProfileId = profileIds.has(input.activeProfileId) ? input.activeProfileId : profiles[0].id;
   let networkBindings = [];

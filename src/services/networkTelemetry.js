@@ -73,6 +73,18 @@ export const getAutoStart = async () => {
   return false;
 };
 
+export const isRunningAsAdmin = async () => {
+  const invoke = await getTauriInvoke();
+  if (!invoke) return false;
+  return invoke('is_running_as_admin');
+};
+
+export const relaunchAsAdmin = async () => {
+  const invoke = await getTauriInvoke();
+  if (!invoke) throw new Error('관리자 권한 실행은 설치된 Windows 앱에서만 사용할 수 있습니다.');
+  return invoke('relaunch_as_admin');
+};
+
 export const fetchRealtimeStats = async (targetInterface = 'ALL (전체 인터페이스)') => {
   if (isTauriAvailable()) {
     try {

@@ -4,7 +4,7 @@ DolphinData is a local-first desktop application. It does not require an account
 
 ## Data stored on the device
 
-Plan profiles, calibration values, usage history, alert preferences, UI settings, the connected Windows network name, and a derived local network fingerprint are stored locally in the application's WebView data directory. The fingerprint is derived from the local gateway MAC address when available; the raw gateway MAC address is not persisted. Exported configuration and CSV files are created only when the user requests them.
+Plan profiles, calibration values, usage history, alert preferences, UI settings, the connected Windows network name, and a derived local network fingerprint are stored locally in the application's WebView data directory. For USB routers, the fingerprint is derived from the Windows USB device ID and gateway address; for other connections, the gateway MAC address may be used. The raw USB device ID and gateway MAC address are not persisted. Exported configuration and CSV files are created only when the user requests them.
 
 Network adapter counters and process CPU/memory information are read from Windows and displayed locally. DolphinData does not send these measurements to the project maintainers or to a DolphinData server.
 

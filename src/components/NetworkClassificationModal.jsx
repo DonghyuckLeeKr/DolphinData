@@ -23,9 +23,14 @@ const MODES = [
   }
 ];
 
-function NetworkClassificationModal({ binding, profiles, onSave, onClose }) {
+function NetworkClassificationModal({ binding, profiles, onSave, onClose, onSaved }) {
   const [meteringMode, setMeteringMode] = useState('metered');
-  const [profileId, setProfileId] = useState(binding?.profileId || profiles?.[0]?.id || '');
+  const [profileId, setProfileId] = useState(() => {
+    const confirmed = (profiles || []).find(p => !p.needsRegistration && p.id === binding?.profileId)
+      || (profiles || []).find(p => !p.needsRegistration);
+    if (confirmed) return confirmed.id;
+    return binding?.profileId || profiles?.[0]?.id || '';
+  });
   const dialogRef = useRef(null);
   const display = getNetworkDisplayInfo(binding || {});
 
@@ -69,7 +74,7 @@ function NetworkClassificationModal({ binding, profiles, onSave, onClose }) {
       meteringMode,
       profileId: meteringMode === 'metered' ? profileId : ''
     });
-    onClose();
+    onSaved();
   };
 
   return (
@@ -114,8 +119,8 @@ function NetworkClassificationModal({ binding, profiles, onSave, onClose }) {
               <Wifi size={21} />
             </div>
             <div>
-              <h2 id="network-classification-title" style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.08rem' }}>새 네트워크를 발견했습니다</h2>
-              <p style={{ margin: '3px 0 0', color: 'var(--text-muted)', fontSize: '0.76rem' }}>처음 한 번만 사용량 처리 방식을 선택해 주세요.</p>
+              <h2 id="network-classification-title" style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.08rem' }}>네트워크 사용 방식을 확인해 주세요</h2>
+              <p style={{ margin: '3px 0 0', color: 'var(--text-muted)', fontSize: '0.76rem' }}>현재 연결을 어떤 요금제에 연결할지 선택해 주세요.</p>
             </div>
           </div>
           <button type="button" onClick={onClose} aria-label="나중에 설정" style={{ width: '44px', height: '44px', border: 0, borderRadius: '10px', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

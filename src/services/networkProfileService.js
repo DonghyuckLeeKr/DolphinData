@@ -2,6 +2,25 @@ import { DEFAULT_PROFILE, MAX_PROFILES, getBillingPeriod } from './storageServic
 
 const safeText = (value) => typeof value === 'string' ? value.trim() : '';
 
+const sameAdapterAndGateway = (binding, identity) => {
+  const interfaceName = safeText(identity.interfaceName).toLowerCase();
+  const gatewayIp = safeText(identity.gatewayIp).toLowerCase();
+  return Boolean(interfaceName && gatewayIp)
+    && safeText(binding.interfaceName).toLowerCase() === interfaceName
+    && safeText(binding.gatewayIp).toLowerCase() === gatewayIp;
+};
+
+const sameReconnectingNetwork = (binding, identity) => {
+  if (!sameAdapterAndGateway(binding, identity)) return false;
+  const previousName = safeText(binding.networkName).toLowerCase();
+  const currentName = safeText(identity.networkName).toLowerCase();
+  const genericName = /^(?:네트워크|network)(?:\s+\d+)?$/;
+  return Boolean(previousName && currentName)
+    && (previousName === currentName || (genericName.test(previousName) && genericName.test(currentName)));
+};
+
+const isStableIdentity = (kind) => kind === 'gateway-mac' || kind === 'usb-device';
+
 const createProfileId = (fingerprint, profiles) => {
   const suffix = safeText(fingerprint).replace(/[^a-zA-Z0-9]/g, '').slice(-16) || Date.now().toString(36);
   const baseId = `network-${suffix}`;
@@ -30,6 +49,11 @@ export const getActiveNetworkBinding = (config) => {
   return config.networkBindings.find(binding => binding.fingerprint === config.activeNetworkFingerprint) || null;
 };
 
+export const disconnectNetworkProfile = (config) => {
+  if (!config?.activeNetworkFingerprint) return config;
+  return { ...config, activeNetworkFingerprint: '' };
+};
+
 export const updateNetworkBinding = (config, bindingPartial = {}) => {
   const fingerprint = safeText(bindingPartial.fingerprint) || config?.activeNetworkFingerprint;
   const bindings = Array.isArray(config?.networkBindings) ? config.networkBindings : [];
@@ -48,7 +72,7 @@ export const updateNetworkBinding = (config, bindingPartial = {}) => {
   const profileId = requestedMode === 'metered'
     ? requestedProfileId
     : requestedMode === 'unclassified'
-      ? previousBinding.profileId
+      ? (requestedProfileId || previousBinding.profileId)
       : '';
   const networkBindings = bindings.map((binding, index) => index === bindingIndex
     ? { ...binding, meteringMode: requestedMode, profileId }
@@ -56,18 +80,45 @@ export const updateNetworkBinding = (config, bindingPartial = {}) => {
 
   let profiles = config.profiles || [];
   let activeProfileId = profileId || config.activeProfileId;
-  if (['unmetered', 'ignored'].includes(requestedMode) && profiles.length > 1) {
-    const candidate = profiles.find(profile => profile.id === previousBinding.profileId);
-    const usedByAnotherNetwork = networkBindings.some(binding => binding.fingerprint !== fingerprint
-      && binding.profileId === previousBinding.profileId);
-    const isUnusedAutomaticPlaceholder = candidate?.profileOrigin === 'auto-network'
-      && candidate.needsRegistration
-      && (Number(candidate.initialBaselineGB) || 0) === 0
-      && (Number(candidate.sessionBytes) || 0) === 0
-      && !usedByAnotherNetwork;
-    if (isUnusedAutomaticPlaceholder) {
-      profiles = profiles.filter(profile => profile.id !== candidate.id);
-      if (activeProfileId === candidate.id) activeProfileId = profiles[0].id;
+  let dailyHistoryByProfile = config.dailyHistoryByProfile || {};
+  const candidate = profiles.find(profile => profile.id === previousBinding.profileId);
+  const usedByAnotherNetwork = networkBindings.some(binding => binding.fingerprint !== fingerprint
+    && binding.profileId === previousBinding.profileId);
+  const isAutomaticPlaceholder = candidate?.profileOrigin === 'auto-network'
+    && candidate.needsRegistration
+    && !usedByAnotherNetwork;
+
+  if (isAutomaticPlaceholder) {
+    if (requestedMode === 'metered' && candidate.id === profileId) {
+      profiles = profiles.map(profile => profile.id === candidate.id
+        ? { ...profile, needsRegistration: false }
+        : profile);
+    } else if (candidate.id !== profileId || ['unmetered', 'ignored'].includes(requestedMode)) {
+      const candidateHistory = dailyHistoryByProfile[candidate.id] || {};
+      const hasRecordedUsage = (Number(candidate.initialBaselineGB) || 0) > 0
+        || (Number(candidate.sessionBytes) || 0) > 0
+        || Object.keys(candidateHistory).length > 0;
+      const canMerge = requestedMode === 'metered' && profileId && (Number(candidate.initialBaselineGB) || 0) === 0;
+      if (canMerge || !hasRecordedUsage) {
+        profiles = profiles.filter(profile => profile.id !== candidate.id);
+        if (canMerge) {
+          profiles = profiles.map(profile => profile.id === profileId
+            ? { ...profile, sessionBytes: Math.round((Number(profile.sessionBytes) || 0) + (Number(candidate.sessionBytes) || 0)) }
+            : profile);
+          if (Object.keys(candidateHistory).length > 0) {
+            const targetHistory = { ...(dailyHistoryByProfile[profileId] || {}) };
+            for (const [dateKey, bytes] of Object.entries(candidateHistory)) {
+              targetHistory[dateKey] = (Number(targetHistory[dateKey]) || 0) + (Number(bytes) || 0);
+            }
+            dailyHistoryByProfile = { ...dailyHistoryByProfile, [profileId]: targetHistory };
+          }
+        }
+        if (Object.hasOwn(dailyHistoryByProfile, candidate.id)) {
+          dailyHistoryByProfile = { ...dailyHistoryByProfile };
+          delete dailyHistoryByProfile[candidate.id];
+        }
+        if (activeProfileId === candidate.id) activeProfileId = profileId || profiles[0]?.id || '';
+      }
     }
   }
 
@@ -75,6 +126,7 @@ export const updateNetworkBinding = (config, bindingPartial = {}) => {
     ...config,
     profiles,
     networkBindings,
+    dailyHistoryByProfile,
     activeProfileId
   };
 };
@@ -87,12 +139,40 @@ export const reconcileNetworkProfile = (config, identity, now = new Date()) => {
 
   const profiles = config.profiles;
   const bindings = Array.isArray(config.networkBindings) ? config.networkBindings : [];
-  const existingIndex = bindings.findIndex(binding => binding.fingerprint === fingerprint);
+  let existingIndex = bindings.findIndex(binding => binding.fingerprint === fingerprint);
+
+  // A reconnect can expose an adapter or gateway-MAC fingerprint before Windows
+  // has resolved the USB device ID. Keep the known device binding while waiting.
+  if (existingIndex < 0 && identity.identityKind !== 'usb-device'
+    && bindings.some(binding => binding.identityKind === 'usb-device' && sameReconnectingNetwork(binding, identity))) {
+    return { config, action: 'none', profileId: config.activeProfileId, fingerprint };
+  }
+  if (existingIndex < 0 && !isStableIdentity(identity.identityKind)
+    && bindings.some(binding => binding.identityKind === 'gateway-mac' && sameReconnectingNetwork(binding, identity))) {
+    return { config, action: 'none', profileId: config.activeProfileId, fingerprint };
+  }
+
+  // Upgrade one unambiguous older binding. A USB device identity can replace
+  // rotating gateway-MAC identities, but two classified plans must stay separate.
+  let ambiguousLegacyMatch = false;
+  if (existingIndex < 0 && isStableIdentity(identity.identityKind)) {
+    const candidates = bindings.map((binding, index) => ({ binding, index }))
+      .filter(({ binding }) => sameReconnectingNetwork(binding, identity)
+        && (identity.identityKind === 'usb-device'
+          ? binding.identityKind !== 'usb-device'
+          : !isStableIdentity(binding.identityKind)));
+    const classified = candidates.filter(({ binding }) => binding.meteringMode !== 'unclassified');
+    if (classified.length === 1) existingIndex = classified[0].index;
+    else if (classified.length === 0 && candidates.length === 1) existingIndex = candidates[0].index;
+    else ambiguousLegacyMatch = candidates.length > 0;
+  }
 
   if (existingIndex >= 0) {
     const existing = bindings[existingIndex];
+    const replacedFingerprint = existing.fingerprint !== fingerprint ? existing.fingerprint : '';
     const refreshed = {
       ...existing,
+      fingerprint,
       networkName: safeText(identity.networkName) || existing.networkName,
       identityKind: safeText(identity.identityKind) || existing.identityKind,
       interfaceName: safeText(identity.interfaceName) || existing.interfaceName,
@@ -130,13 +210,16 @@ export const reconcileNetworkProfile = (config, identity, now = new Date()) => {
       },
       action: shouldSwitch ? 'switched' : 'updated',
       profileId,
-      fingerprint
+      fingerprint,
+      replacedFingerprint
     };
   }
 
   let profileId = config.activeProfileId;
   let updatedProfiles = profiles;
-  if (profiles.length < MAX_PROFILES) {
+  if (ambiguousLegacyMatch && identity.identityKind === 'usb-device') {
+    profileId = profiles.find(profile => !profile.needsRegistration)?.id || profileId;
+  } else if (profiles.length < MAX_PROFILES) {
     profileId = createProfileId(fingerprint, profiles);
     const fallbackNumber = profiles.length + 1;
     const profileName = safeText(identity.networkName) || `새 네트워크 ${fallbackNumber}`;

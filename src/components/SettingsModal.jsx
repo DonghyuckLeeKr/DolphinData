@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, memo } from 'react';
-import { X, Check, Settings, Download, Upload, FileText, Power, Wifi, Info, Mail } from 'lucide-react';
+import { X, Check, Settings, Download, Upload, FileText, Power, Wifi, Info, Mail, ShieldCheck } from 'lucide-react';
 import { open } from '@tauri-apps/api/shell';
-import { setAutoStart, getAutoStart, isTauriAvailable } from '../services/networkTelemetry';
+import { setAutoStart, getAutoStart, isRunningAsAdmin, isTauriAvailable } from '../services/networkTelemetry';
 import { getInstalledAppVersion } from '../services/updateService';
 import { getNetworkDisplayInfo } from '../utils/networkDisplay';
 import { buildSupportMailto, SUPPORT_EMAIL } from '../utils/appMetadata';
@@ -13,6 +13,7 @@ function SettingsModal({
   activeProfile,
   networkBinding,
   onSave,
+  onRunAsAdmin,
   onSaveNetworkBinding,
   onImportConfig,
   onClose
@@ -21,6 +22,9 @@ function SettingsModal({
   const [boundProfileId, setBoundProfileId] = useState(networkBinding?.profileId || activeProfile?.id || '');
   const [unitMode, setUnitMode] = useState(config?.unitMode || 'MBs');
   const [autoStartEnabled, setAutoStartEnabled] = useState(Boolean(config?.autoStart));
+  const [runningAsAdmin, setRunningAsAdmin] = useState(false);
+  const [relaunchingAsAdmin, setRelaunchingAsAdmin] = useState(false);
+  const [adminLaunchError, setAdminLaunchError] = useState('');
   const [appVersion, setAppVersion] = useState('확인 중');
   const [dailySurgeLimit, setDailySurgeLimit] = useState(
     config?.dailySurgeLimitGB !== undefined ? String(config.dailySurgeLimitGB) : '5'
@@ -37,6 +41,14 @@ function SettingsModal({
     return () => {
       isMounted = false;
     };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    isRunningAsAdmin()
+      .then(elevated => { if (isMounted) setRunningAsAdmin(Boolean(elevated)); })
+      .catch(error => console.warn('Failed to check administrator status', error));
+    return () => { isMounted = false; };
   }, []);
 
   useEffect(() => {
@@ -68,35 +80,50 @@ function SettingsModal({
     }
   };
 
+  const persistSettings = async (relaunch = false) => {
+    const actualAutoStart = await setAutoStart(autoStartEnabled);
+    if (actualAutoStart !== autoStartEnabled) {
+      throw new Error('운영체제 자동 시작 설정이 요청한 상태로 변경되지 않았습니다.');
+    }
+
+    const bindingUpdates = networkBinding ? {
+      meteringMode,
+      profileId: meteringMode === 'metered' ? boundProfileId : (networkBinding.profileId || boundProfileId)
+    } : null;
+    const configUpdates = {
+      unitMode,
+      autoStart: autoStartEnabled,
+      dailySurgeLimitGB: Math.max(0.5, parseFloat(dailySurgeLimit) || 5)
+    };
+    if (!relaunch) {
+      if (onSaveNetworkBinding && bindingUpdates) onSaveNetworkBinding(bindingUpdates);
+      if (onSave) onSave(configUpdates);
+    }
+    return { configUpdates, bindingUpdates };
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
     try {
-      const actualAutoStart = await setAutoStart(autoStartEnabled);
-      if (actualAutoStart !== autoStartEnabled) {
-        throw new Error('운영체제 자동 시작 설정이 요청한 상태로 변경되지 않았습니다.');
-      }
+      await persistSettings();
+      onClose();
     } catch (error) {
-      alert(`자동 시작 설정을 저장하지 못했습니다.\n${error instanceof Error ? error.message : String(error)}`);
-      return;
+      alert(`설정을 저장하지 못했습니다.\n${error instanceof Error ? error.message : String(error)}`);
     }
+  };
 
-    if (onSaveNetworkBinding && networkBinding) {
-      onSaveNetworkBinding({
-        meteringMode,
-        profileId: meteringMode === 'metered' ? boundProfileId : (networkBinding.profileId || boundProfileId)
-      });
+  const handleRunAsAdmin = async () => {
+    if (!onRunAsAdmin || relaunchingAsAdmin || runningAsAdmin) return;
+    setAdminLaunchError('');
+    setRelaunchingAsAdmin(true);
+    try {
+      const settings = await persistSettings(true);
+      await onRunAsAdmin(settings);
+    } catch (error) {
+      setAdminLaunchError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setRelaunchingAsAdmin(false);
     }
-
-    if (onSave) {
-      onSave({
-        unitMode,
-        autoStart: autoStartEnabled,
-        dailySurgeLimitGB: Math.max(0.5, parseFloat(dailySurgeLimit) || 5)
-      });
-    }
-
-    onClose();
   };
 
   // Export CSV with UTF-8 BOM (\uFEFF) to fix Excel Korean character encoding
@@ -322,6 +349,30 @@ function SettingsModal({
               onClick={(e) => e.stopPropagation()}
               style={{ width: '18px', height: '18px', accentColor: 'var(--brand-color)', cursor: 'pointer' }}
             />
+          </div>
+
+          {/* Optional elevation for process-level network diagnostics */}
+          <div style={{ padding: '12px 14px', background: 'var(--glass-card)', border: '1px solid var(--glass-border-light)', borderRadius: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+              <ShieldCheck size={18} color="var(--brand-color)" />
+              <div>
+                <span style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-main)' }}>관리자 권한 실행</span>
+                <span style={{ display: 'block', fontSize: '0.73rem', color: 'var(--text-muted)' }}>
+                  부팅 시에는 일반 권한으로 실행됩니다. 필요할 때만 Windows의 권한 확인 후 다시 엽니다.
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="glass-btn"
+              onClick={handleRunAsAdmin}
+              disabled={!isTauriAvailable() || runningAsAdmin || relaunchingAsAdmin}
+              style={{ minHeight: '44px', width: '100%', justifyContent: 'center', cursor: runningAsAdmin || relaunchingAsAdmin ? 'default' : 'pointer' }}
+            >
+              <ShieldCheck size={16} />
+              <span>{runningAsAdmin ? '현재 관리자 권한으로 실행 중' : relaunchingAsAdmin ? 'Windows 권한 확인 대기 중…' : '관리자 권한으로 다시 실행'}</span>
+            </button>
+            {adminLaunchError && <p role="alert" style={{ margin: '8px 0 0', fontSize: '0.76rem', color: 'var(--accent-red, #f87171)' }}>{adminLaunchError}</p>}
           </div>
 
           {/* Daily Surge Limiter */}

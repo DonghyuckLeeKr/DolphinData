@@ -8,7 +8,15 @@ export default function QuotaRingCard({ profile, config, networkBinding, onOpenN
   const meteringMode = networkBinding?.meteringMode || 'unclassified';
 
   if (meteringMode !== 'metered') {
-    const state = meteringMode === 'unmetered'
+    const state = !networkBinding
+      ? {
+          Icon: Wifi,
+          title: '네트워크 연결 대기',
+          badge: '사용량 누적 중지',
+          description: '연결된 네트워크가 없습니다. 라우터를 연결하면 자동으로 다시 확인합니다.',
+          color: 'var(--text-muted)'
+        }
+      : meteringMode === 'unmetered'
       ? {
           Icon: InfinityIcon,
           title: '무제한 네트워크',
@@ -47,14 +55,16 @@ export default function QuotaRingCard({ profile, config, networkBinding, onOpenN
         <div style={{ padding: '14px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.04)', border: '1px solid var(--glass-border-light)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-main)', marginBottom: '6px' }}>
             <Wifi size={16} color="var(--brand-color)" />
-            <b>{networkBinding?.networkName || '현재 네트워크 확인 중'}</b>
+            <b>{networkBinding?.networkName || '연결된 네트워크 없음'}</b>
           </div>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', lineHeight: 1.55, margin: 0 }}>{state.description}</p>
         </div>
-        <button type="button" onClick={onOpenNetworkSettings} className="glass-btn" style={{ alignSelf: 'flex-start', cursor: 'pointer', color: 'var(--brand-color)', borderColor: 'var(--brand-color)' }}>
-          <Settings size={15} />
-          <span>네트워크 분류 설정</span>
-        </button>
+        {networkBinding && (
+          <button type="button" onClick={onOpenNetworkSettings} className="glass-btn" style={{ alignSelf: 'flex-start', cursor: 'pointer', color: 'var(--brand-color)', borderColor: 'var(--brand-color)' }}>
+            <Settings size={15} />
+            <span>네트워크 분류 설정</span>
+          </button>
+        )}
       </div>
     );
   }
