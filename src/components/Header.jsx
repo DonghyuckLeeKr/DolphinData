@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Settings, Monitor, Palette, Globe, ExternalLink, Calendar } from 'lucide-react';
+import React, { useState, useSyncExternalStore } from 'react';
+import { Settings, Monitor, Palette, Globe, ExternalLink, Calendar, LifeBuoy } from 'lucide-react';
+import { diagnosticSession } from '../services/diagnosticSubmission.js';
 import { openRouterAdminPage } from '../services/routerDetectionService';
 import { getNetworkDisplayInfo } from '../utils/networkDisplay';
 
@@ -9,11 +10,13 @@ export default function Header({
   networkBinding,
   onOpenDailyHistory,
   onOpenSettings,
+  onOpenReport,
   onToggleMiniGadget,
   onSelectTheme,
   telemetry
 }) {
   const [routerOpenError, setRouterOpenError] = useState('');
+  const diagnosticRecording = useSyncExternalStore(diagnosticSession.subscribe, diagnosticSession.getSnapshot).phase === 'recording';
   const currentTheme = config.theme || 'soft-dark';
   const networkDisplay = getNetworkDisplayInfo(networkBinding || {});
   const currentNetworkLabel = networkBinding
@@ -200,13 +203,36 @@ export default function Header({
             <span>미니</span>
           </button>
 
+          {/* Problem report; shows a live badge while a diagnostic recording runs in the background */}
+          <button
+            type="button"
+            onClick={onOpenReport}
+            className="glass-btn"
+            style={{
+              padding: '6px 9px',
+              cursor: 'pointer',
+              ...(diagnosticRecording ? { color: 'var(--accent-rose)', borderColor: 'var(--accent-rose)' } : {})
+            }}
+            title={diagnosticRecording ? '진단 기록 중 · 문제 신고 창 열기' : '문제 신고'}
+            aria-label={diagnosticRecording ? '진단 기록 중, 문제 신고 창 열기' : '문제 신고'}
+          >
+            <LifeBuoy size={14} />
+            {diagnosticRecording && (
+              <>
+                <span className="pulse-dot" style={{ width: 7, height: 7, background: 'var(--accent-rose)', boxShadow: 'none' }} aria-hidden="true" />
+                <span style={{ fontSize: '0.74rem', fontWeight: 700 }}>기록 중</span>
+              </>
+            )}
+          </button>
+
           {/* Settings Button */}
           <button
             type="button"
             onClick={onOpenSettings}
             className="glass-btn"
             style={{ padding: '6px 9px', cursor: 'pointer' }}
-            title="환경 설정 (자동 실행, 일일 한도 경고, 백업 등)"
+            title="환경 설정"
+            aria-label="환경 설정"
           >
             <Settings size={14} />
           </button>

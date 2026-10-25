@@ -68,6 +68,21 @@ export const getBillingPeriod = (resetDay = 1, date = new Date()) => {
 
 export const getCurrentPeriod = () => getBillingPeriod(1);
 
+// Secondary dashboard cards the user may hide. The water-level hero and network prompts always stay.
+export const DASHBOARD_CARDS = [
+  { id: 'traffic', label: '실시간 트래픽 추이', simple: false },
+  { id: 'speed', label: '실시간 전송 속도', simple: true },
+  { id: 'ping', label: '네트워크 지연시간 (Ping)', simple: false },
+  { id: 'processes', label: '활성 프로세스 리소스', simple: false }
+];
+
+export const isDashboardCardVisible = (config, cardId) => {
+  const card = DASHBOARD_CARDS.find(option => option.id === cardId);
+  if (!card) return true;
+  if (config?.dashboardMode === 'simple') return card.simple;
+  return !(config?.hiddenCards || []).includes(cardId);
+};
+
 const createDefaultConfig = () => ({
   activeProfileId: 'profile-1',
   profiles: [{ ...DEFAULT_PROFILE, lastResetPeriod: getBillingPeriod(1) }],
@@ -76,6 +91,8 @@ const createDefaultConfig = () => ({
   miniMode: false,
   autoStart: false,
   dailySurgeLimitGB: 5,
+  dashboardMode: 'detailed',
+  hiddenCards: [],
   dailyHistoryByProfile: {},
   activeNetworkFingerprint: '',
   networkBindings: [],
@@ -294,6 +311,10 @@ export const normalizeConfig = (input) => {
     miniMode: Boolean(input.miniMode),
     autoStart: Boolean(input.autoStart),
     dailySurgeLimitGB: normalizeNumber(input.dailySurgeLimitGB, 5, 0.5, 100),
+    dashboardMode: input.dashboardMode === 'simple' ? 'simple' : 'detailed',
+    hiddenCards: Array.isArray(input.hiddenCards)
+      ? [...new Set(input.hiddenCards.filter(card => DASHBOARD_CARDS.some(option => option.id === card)))]
+      : [],
     dailyHistoryByProfile,
     activeNetworkFingerprint,
     networkBindings,

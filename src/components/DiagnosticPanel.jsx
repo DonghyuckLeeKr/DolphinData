@@ -33,10 +33,9 @@ export default function DiagnosticPanel({ config, admin, session = diagnosticSes
     const anchor = document.createElement('a'); anchor.href = url; anchor.download = `DolphinData-diagnostic-${report.reportId}.json`; anchor.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
-  return <section aria-label="문제 진단" style={{ display: 'grid', gap: 12, borderTop: '1px solid var(--glass-border)', paddingTop: 20 }}>
-    <strong style={{ fontSize: '0.88rem' }}>문제 진단 및 접수</strong>
+  return <section aria-label="문제 진단" style={{ display: 'grid', gap: 12 }}>
     <p style={small}>1. 기록 시작 → 2. 문제가 발생하는 동작 재현 → 3. 문제 접수</p>
-    <p style={{ ...small, color: 'var(--text-muted)' }}>설정 창을 닫아도 기록은 계속됩니다. 직접 종료하거나 접수할 때 멈춥니다. 같은 상태는 반복 저장하지 않으며 최근 240개 상태를 보관합니다.</p>
+    <p style={{ ...small, color: 'var(--text-muted)' }}>기록은 직접 종료하거나 접수할 때 멈춥니다. 같은 상태는 반복 저장하지 않으며 최근 240개 상태를 보관합니다.</p>
     <label style={small}>문제 종류
       <select aria-label="문제 종류" style={field} value={state.symptom} disabled={frozen}
         onChange={event => { session.edit({ symptom: event.target.value }); setPreview(''); }}>

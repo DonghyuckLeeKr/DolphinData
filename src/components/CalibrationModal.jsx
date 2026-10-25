@@ -1,9 +1,13 @@
-import React, { useState, memo } from 'react';
+import React, { useState, memo, useId, useRef } from 'react';
+import useModalA11y from '../hooks/useModalA11y';
 import { X, Check, Edit3, RefreshCw, Radio, Sparkles } from 'lucide-react';
 import { detectLteRouterCarrier } from '../services/routerDetectionService';
 import { getBillingPeriod } from '../services/storageService';
 
 function CalibrationModal({ profile, networkBindings = [], onSave, onClose }) {
+  const dialogRef = useRef(null);
+  const titleId = useId();
+  useModalA11y(dialogRef, onClose);
   const [carrierInput, setCarrierInput] = useState(profile.carrierName || profile.name || '모바일 데이터 요금제');
   const [baselineInput, setBaselineInput] = useState(
     profile.initialBaselineGB !== undefined ? String(profile.initialBaselineGB) : '0'
@@ -96,6 +100,10 @@ function CalibrationModal({ profile, networkBindings = [], onSave, onClose }) {
       }}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%',
@@ -113,6 +121,7 @@ function CalibrationModal({ profile, networkBindings = [], onSave, onClose }) {
         
         {/* Close Button */}
         <button
+          aria-label="닫기"
           onClick={onClose}
           type="button"
           style={{
@@ -145,7 +154,7 @@ function CalibrationModal({ profile, networkBindings = [], onSave, onClose }) {
             <Edit3 size={20} />
           </div>
           <div>
-            <h2 style={{ fontSize: '1.15rem', fontWeight: '700', color: 'var(--text-main)' }}>
+            <h2 id={titleId} style={{ fontSize: '1.15rem', fontWeight: '700', color: 'var(--text-main)' }}>
               '{profile.name || '요금제'}' 사용량 보정 & 라우터 검색
             </h2>
             <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>

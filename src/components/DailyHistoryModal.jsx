@@ -1,8 +1,12 @@
-import React, { useState, useMemo, memo } from 'react';
+import React, { useState, useMemo, memo, useId, useRef } from 'react';
+import useModalA11y from '../hooks/useModalA11y';
 import { X, Calendar, BarChart3 } from 'lucide-react';
 import { getDailyHistoryGB, getTodayKey } from '../services/storageService';
 
 function DailyHistoryModal({ config, activeProfile, onClose }) {
+  const dialogRef = useRef(null);
+  const titleId = useId();
+  useModalA11y(dialogRef, onClose);
   const [viewMode, setViewMode] = useState('chart'); // 'chart' or 'list'
   const history = useMemo(
     () => getDailyHistoryGB(config, activeProfile?.id),
@@ -48,6 +52,10 @@ function DailyHistoryModal({ config, activeProfile, onClose }) {
       }}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%',
@@ -65,6 +73,7 @@ function DailyHistoryModal({ config, activeProfile, onClose }) {
         
         {/* Close Button */}
         <button
+          aria-label="닫기"
           onClick={onClose}
           type="button"
           style={{
@@ -97,7 +106,7 @@ function DailyHistoryModal({ config, activeProfile, onClose }) {
             <Calendar size={20} />
           </div>
           <div>
-            <h2 style={{ fontSize: '1.15rem', fontWeight: '700', color: 'var(--text-main)' }}>
+            <h2 id={titleId} style={{ fontSize: '1.15rem', fontWeight: '700', color: 'var(--text-main)' }}>
               일별 데이터 소비 캘린더 & 통계
             </h2>
             <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>

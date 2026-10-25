@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   addDailyUsageBytes,
   getBillingPeriod,
+  isDashboardCardVisible,
   MAX_DAILY_HISTORY_ENTRIES,
   normalizeConfig,
   rolloverBillingCycles
@@ -223,4 +224,20 @@ test('unbound placeholder with recorded usage is retained without moving it to a
   assert.equal(config.profiles.length, 2);
   assert.equal(config.profiles[0].sessionBytes, 50);
   assert.equal(config.profiles[1].sessionBytes, 200);
+});
+
+test('dashboard view settings default to detailed and drop unknown or duplicate cards', () => {
+  const defaults = makeConfig();
+  assert.equal(defaults.dashboardMode, 'detailed');
+  assert.deepEqual(defaults.hiddenCards, []);
+  const imported = makeConfig({ dashboardMode: 'grid', hiddenCards: ['ping', 'ping', 'quota', 42, 'traffic'] });
+  assert.equal(imported.dashboardMode, 'detailed');
+  assert.deepEqual(imported.hiddenCards, ['ping', 'traffic']);
+});
+
+test('simple mode keeps only the speed card while detailed mode honours hidden cards', () => {
+  const simple = makeConfig({ dashboardMode: 'simple' });
+  assert.deepEqual(['traffic', 'speed', 'ping', 'processes'].filter(card => isDashboardCardVisible(simple, card)), ['speed']);
+  const detailed = makeConfig({ hiddenCards: ['processes'] });
+  assert.deepEqual(['traffic', 'speed', 'ping', 'processes'].filter(card => isDashboardCardVisible(detailed, card)), ['traffic', 'speed', 'ping']);
 });
