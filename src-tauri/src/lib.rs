@@ -1,5 +1,6 @@
 pub mod diagnostic_intake;
 pub mod diagnostics;
 pub mod network_identity;
+pub mod ping;
 pub mod process_network;
 pub mod telemetry;

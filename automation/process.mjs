@@ -28,3 +28,5 @@ export function run(file, args, { cwd, input, env = process.env, timeout = 12000
 }
 export const agentEnvironment = env => Object.fromEntries(Object.entries(env).filter(([k]) =>
   ['PATH', 'PATHEXT', 'SYSTEMROOT', 'WINDIR', 'COMSPEC', 'TEMP', 'TMP', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'HOME', 'CODEX_HOME'].includes(k.toUpperCase())));
+// Git settings for repositories whose contents an agent controlled: no hooks, no fsmonitor command.
+export const UNTRUSTED_GIT_CONFIG = ['-c', `core.hooksPath=${process.platform === 'win32' ? 'NUL' : '/dev/null'}`, '-c', 'core.fsmonitor=false'];

@@ -42,7 +42,7 @@ import UpdateModal from './components/UpdateModal';
 import { checkForAppUpdate, installAppUpdate } from './services/updateService';
 
 export default function App() {
-  const [config, setConfig] = useState(loadConfig());
+  const [config, setConfig] = useState(loadConfig);
   const [telemetry, setTelemetry] = useState({
     downloadSpeed: 0,
     uploadSpeed: 0,
@@ -289,7 +289,7 @@ export default function App() {
                   };
                   // Check threshold push notification for this profile
                   const profileTotalGB = calculateTotalUsedGB(updatedP);
-                  checkAndNotifyThresholds(profileTotalGB, updatedP.monthlyLimitGB || 100, updatedP.name, updatedP.id);
+                  checkAndNotifyThresholds(profileTotalGB, updatedP.monthlyLimitGB || 100, updatedP.name, updatedP.id, rolledConfig.alerts);
                   return updatedP;
                 }
                 return p;

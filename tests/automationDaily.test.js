@@ -34,7 +34,7 @@ test('daily identity uses the Korean date across UTC midnight boundaries', () =>
 
 test('preview never runs AI; concurrent triggers and restart run only once per Korean day', async t => {
   const { controller, daily, generated, directory, settle } = await setup(t);
-  const one = await controller.importReport(report()); const two = await controller.importReport(report());
+  const one = await controller.importReport(report(), { trusted: true }); const two = await controller.importReport(report(), { trusted: true });
   const preview = await daily.run({ previewOnly: true }); assert.deepEqual(preview.ids, [one.id, two.id]); assert.equal(generated.length, 0); assert.equal(daily.history.length, 0);
   const results = await Promise.all([daily.run(), daily.run(), daily.run()]); await settle();
   assert.deepEqual(results.map(r => r.state), ['started', 'already-checked', 'already-checked']);
@@ -48,7 +48,7 @@ test('preview never runs AI; concurrent triggers and restart run only once per K
 test('oldest ten are grouped; pending approval defers newer receipts until the next day', async t => {
   const { controller, daily, generated, settle, setNow } = await setup(t);
   const ids = [];
-  for (let i = 0; i < 12; i++) { const r = await controller.importReport(report(`일반 요청 ${i}`)); controller.get(r.id).createdAt = new Date(2026, 9, 1, 0, i).toISOString(); ids.push(r.id); }
+  for (let i = 0; i < 12; i++) { const r = await controller.importReport(report(`일반 요청 ${i}`), { trusted: true }); controller.get(r.id).createdAt = new Date(2026, 9, 1, 0, i).toISOString(); ids.push(r.id); }
   const first = await daily.run(); await settle(); assert.equal(first.state, 'started'); assert.equal(first.remaining, 2);
   assert.deepEqual(controller.get(first.jobId).reportIds, ids.slice(0, 10));
   setNow('2026-10-12T12:00:00Z'); const deferred = await daily.run(); assert.equal(deferred.state, 'deferred'); assert.equal(generated.length, 1);
@@ -59,9 +59,9 @@ test('oldest ten are grouped; pending approval defers newer receipts until the n
 
 test('failed and interrupted receipts are not retried; excluded receipts persist; one fresh receipt runs alone', async t => {
   const { controller, daily, directory, generated, settle } = await setup(t);
-  const excluded = await controller.importReport(report()); await controller.setAutomatic(excluded.id, false, 'test');
-  for (const status of ['failed', 'interrupted']) { const r = await controller.importReport(report()); controller.get(r.id).status = status; await controller.save(controller.get(r.id)); }
-  const fresh = await controller.importReport(report());
+  const excluded = await controller.importReport(report(), { trusted: true }); await controller.setAutomatic(excluded.id, false, 'test');
+  for (const status of ['failed', 'interrupted']) { const r = await controller.importReport(report(), { trusted: true }); controller.get(r.id).status = status; await controller.save(controller.get(r.id)); }
+  const fresh = await controller.importReport(report(), { trusted: true });
   assert.deepEqual(dailyPlan(controller).ids, [fresh.id]); assert.equal(dailyPlan(controller).excluded, 1);
   const started = await daily.run(); await settle(); assert.equal(started.jobId, fresh.id); assert.deepEqual(generated, [fresh.id]);
   assert.equal(controller.get(excluded.id).status, 'received');
@@ -69,25 +69,39 @@ test('failed and interrupted receipts are not retried; excluded receipts persist
   await assert.rejects(controller.setAutomatic(fresh.id, 'true', 'test'));
 });
 
+test('public receipts wait for owner triage before the daily run sends them to AI', async t => {
+  const { controller, daily, generated, directory, settle, setNow } = await setup(t);
+  const untrusted = await controller.importReport(report('외부에서 접수된 요청'));
+  assert.equal(untrusted.triagePending, true); assert.equal(untrusted.autoProcessExcluded, true); assert.equal(untrusted.canRequestFix, true);
+  assert.deepEqual(dailyPlan(controller).ids, []); assert.equal(dailyPlan(controller).awaitingTriage, 1); assert.equal(dailyPlan(controller).excluded, 0);
+  assert.equal((await daily.run()).state, 'empty'); assert.equal(generated.length, 0);
+  const reloaded = new AutomationController({ directory, repositoryRoot: process.cwd() }); await reloaded.init();
+  assert.equal(reloaded.get(untrusted.id).triagePending, true);
+  const included = await controller.setAutomatic(untrusted.id, true, 'test');
+  assert.equal(included.triagePending, undefined); assert.equal(included.autoProcessExcluded, false);
+  setNow('2026-10-12T12:00:00Z'); assert.deepEqual(dailyPlan(controller).ids, [untrusted.id]);
+  const started = await daily.run(); await settle(); assert.equal(started.jobId, untrusted.id); assert.deepEqual(generated, [untrusted.id]);
+});
+
 test('empty days skip model readiness and AI; missing evidence is marked without blocking a valid request', async t => {
   const { controller, daily, generated, setNow, settle } = await setup(t);
   controller.readiness = async () => { throw new Error('로그인 미완료'); };
   assert.equal((await daily.run()).state, 'empty'); assert.equal(generated.length, 0);
   setNow('2026-10-12T12:00:00Z'); controller.readiness = async () => ({ codex: true, previewWorkflow: true, releaseApproval: true });
-  const bad = await controller.importReport(report('재연결 문제', 'same-router-reconnect'));
-  const good = await controller.importReport(report()); const result = await daily.run(); await settle();
+  const bad = await controller.importReport(report('재연결 문제', 'same-router-reconnect'), { trusted: true });
+  const good = await controller.importReport(report(), { trusted: true }); const result = await daily.run(); await settle();
   assert.equal(result.jobId, good.id); assert.equal(result.insufficient.length, 1); assert.equal(controller.get(bad.id).status, 'insufficient-evidence');
 });
 
 test('persisted reservation after a crash never repeats AI, even before a job existed', async t => {
-  const { directory, controller, generated } = await setup(t); await controller.importReport(report());
+  const { directory, controller, generated } = await setup(t); await controller.importReport(report(), { trusted: true });
   await writeFile(path.join(directory, 'daily-runs.json'), JSON.stringify({ runs: [{ day: '2026-10-11', state: 'preparing', ids: [] }] }));
   const daily = new DailyBatchRunner(controller, { now: () => new Date('2026-10-11T12:00:00Z') }); await daily.init();
   assert.equal(daily.status().last.state, 'interrupted'); assert.equal((await daily.run()).state, 'already-checked'); assert.equal(generated.length, 0);
 });
 
 test('disabled and failed readiness do not start AI; failed daily trigger is not automatically retried', async t => {
-  const { daily, controller, generated } = await setup(t); await controller.importReport(report());
+  const { daily, controller, generated } = await setup(t); await controller.importReport(report(), { trusted: true });
   await daily.configure({ enabled: false, time: '21:00', timeZone: 'Asia/Seoul' }); assert.equal((await daily.run()).state, 'disabled');
   await daily.configure({ enabled: true, time: '21:00', timeZone: 'Asia/Seoul' });
   controller.readiness = async () => ({ codex: false }); assert.equal((await daily.run()).state, 'failed');

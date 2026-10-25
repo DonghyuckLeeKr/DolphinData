@@ -39,7 +39,7 @@ export async function createAdminServer(controller, { token = randomBytes(32).to
         send(200, await daily.run({ previewOnly: input.previewOnly === true })); return;
       }
       if (url.pathname === '/api/daily-config' && daily) { send(200, await daily.configure(input)); return; }
-      if (url.pathname === '/api/reports') { send(201, await controller.importReport(input)); return; }
+      if (url.pathname === '/api/reports') { send(201, await controller.importReport(input, { trusted: true })); return; }
       if (url.pathname === '/api/batches') { send(201, await controller.startBatch(input.ids, 'local')); return; }
       const match = /^\/api\/reports\/([a-f0-9-]+)\/(fix|refresh|approve|release|requeue|retry|automatic)$/.exec(url.pathname);
       if (!match) { send(404, { error: '찾을 수 없습니다.' }); return; }

@@ -27,12 +27,18 @@ for (const batchMode of [false, true]) test(`local ${batchMode ? 'batch' : 'sing
   const baseSha = await git(['rev-parse', 'HEAD']); const pushTarget = path.join(directory, 'remote.git');
   await run('git', ['init', '--bare', pushTarget]);
   await git(['push', pushTarget, `${baseSha}:refs/heads/main`]);
+  const hookMarker = path.join(directory, 'hook-ran.txt');
   let prompt; let mergeCalled = false; let shouldEdit = false; let prBody;
   const execute = async (file, args, options = {}) => {
     if (file === 'codex-test') {
       prompt = options.input;
       await writeFile(args[args.indexOf('--output-last-message') + 1], shouldEdit ? '수정안을 만들고 검사를 요청했습니다.' : '개선할 화면을 확인해주세요.');
-      if (shouldEdit) await writeFile(path.join(options.cwd, 'src/services/example.js'), 'export const value = 2;\n');
+      if (shouldEdit) {
+        await writeFile(path.join(options.cwd, 'src/services/example.js'), 'export const value = 2;\n');
+        // A prompt-injected agent may plant hooks; the controller's own git calls must never run them.
+        for (const hook of ['post-index-change', 'pre-commit', 'post-checkout'])
+          await writeFile(path.join(options.cwd, '.git', 'hooks', hook), `#!/bin/sh\necho hook > "${hookMarker.replace(/\\/g, '/')}"\n`, { mode: 0o755 });
+      }
       return 'fake model output';
     }
     if (file === 'gh' && args[0] === 'api') {
@@ -73,6 +79,7 @@ for (const batchMode of [false, true]) test(`local ${batchMode ? 'batch' : 'sing
     await controller.startFix(record.id, 'test'); await completion;
     assert.equal(record.status, 'preview-pending'); assert.equal(record.attempts, 2);
     assert.notEqual(firstWorkspace, record.workspace);
+    await assert.rejects(readFile(hookMarker), { code: 'ENOENT' });
     assert.ok(prompt.includes('PRIVATE USER TEXT')); assert.ok(prompt.includes('untrusted data'));
     assert.ok(!prBody.includes('PRIVATE USER TEXT'));
     assert.equal(controller.list().length, batchMode ? 3 : 1); assert.equal(record.audit.filter(a => a.action === 'request-fix').length, 1);

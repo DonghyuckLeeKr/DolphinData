@@ -6,7 +6,7 @@ import { parseDiagnosticReport, publicDiagnosticContext, redactDescription } fro
 import { buildFixPrompt, buildBatchFixPrompt, canRequestFix, codexFixArguments, assertFixEvidence, MAX_BATCH_REPORTS } from './fixRequest.mjs';
 import { replayDiagnosticReport } from '../src/services/diagnosticReplay.js';
 import { REPOSITORY, isId, isSha, digest, assertAllowedChanges, assertApproval } from './policy.mjs';
-import { run, agentEnvironment } from './process.mjs';
+import { run, agentEnvironment, UNTRUSTED_GIT_CONFIG } from './process.mjs';
 
 export class AutomationController extends EventEmitter {
   constructor({ directory, repositoryRoot, execute = run, codex = 'codex' }) {
@@ -61,7 +61,8 @@ export class AutomationController extends EventEmitter {
     });
     this.saveChains.set(record.id, save); await save;
   }
-  async importReport(raw) {
+  // Only the local admin is trusted; anything else waits for owner triage before daily AI processing.
+  async importReport(raw, { trusted = false } = {}) {
     const report = parseDiagnosticReport(raw);
     const imported = this.importChain.catch(() => {}).then(async () => {
       const reports = [...this.records.values()].filter(r => r.kind !== 'batch');
@@ -71,12 +72,15 @@ export class AutomationController extends EventEmitter {
         return this.view(existing);
       }
       if (reports.length >= 200) throw new Error('보관 한도 200개에 도달했습니다. 저장 폴더의 오래된 리포트를 정리해주세요.');
-      const record = { id: randomUUID(), report, replay: replayDiagnosticReport(report), status: 'received', createdAt: new Date().toISOString(), audit: [] };
+      const record = { id: randomUUID(), report, replay: replayDiagnosticReport(report), status: 'received', createdAt: new Date().toISOString(), audit: [],
+        ...(trusted ? {} : { autoProcessExcluded: true, triagePending: true }) };
       record.audit.push({ at: record.createdAt, action: 'import' }); await this.save(record); return this.view(record);
     });
     this.importChain = imported;
     return imported;
   }
+  // The AI controlled this tree: never run its hooks/fsmonitor, and keep operator secrets out of git's environment.
+  untrustedGit(workspace, args) { return this.execute('git', [...UNTRUSTED_GIT_CONFIG, ...args], { cwd: workspace, env: agentEnvironment(process.env) }); }
   gh(args, options = {}) { return this.execute('gh', args, { cwd: this.repositoryRoot, ...options }); }
   api(endpoint, fields, method = 'POST') {
     return this.gh(['api', endpoint, ...(fields ? ['--method', method, '--input', '-'] : [])], fields ? { input: JSON.stringify(fields) } : {} ).then(text => text ? JSON.parse(text) : null);
@@ -136,7 +140,7 @@ export class AutomationController extends EventEmitter {
   async setAutomatic(id, allowed, actor) {
     const record = this.get(id);
     if (typeof allowed !== 'boolean' || record.kind === 'batch') throw new Error('접수의 자동 처리 포함 여부를 확인해주세요.');
-    record.autoProcessExcluded = !allowed; record.audit.push({ at: new Date().toISOString(), actor, action: 'set-automatic', allowed });
+    record.autoProcessExcluded = !allowed; delete record.triagePending; record.audit.push({ at: new Date().toISOString(), actor, action: 'set-automatic', allowed });
     await this.save(record); return this.view(record);
   }
   runFix(record) {
@@ -163,20 +167,20 @@ export class AutomationController extends EventEmitter {
     record.aiSummary = this.safeError(redactDescription(await readFile(summaryPath, 'utf8').catch(() => '')));
     // Trust only the diff; reject commits/config rewrites as well as forbidden files.
     if (await readFile(path.join(workspace, '.git', 'config'), 'utf8') !== gitConfig) throw new Error('AI가 Git 설정을 변경했습니다.');
-    if (await this.execute('git', ['rev-parse', 'HEAD'], { cwd: workspace }) !== record.baseSha) throw new Error('AI가 기준 커밋을 변경했습니다.');
-    await this.execute('git', ['add', '-A'], { cwd: workspace });
-    const names = await this.execute('git', ['diff', '--cached', '--name-status', '--no-renames'], { cwd: workspace });
+    if (await this.untrustedGit(workspace, ['rev-parse', 'HEAD']) !== record.baseSha) throw new Error('AI가 기준 커밋을 변경했습니다.');
+    await this.untrustedGit(workspace, ['add', '-A']);
+    const names = await this.untrustedGit(workspace, ['diff', '--cached', '--name-status', '--no-renames']);
     if (!names) { record.status = 'insufficient-evidence'; record.error = '수정안이 생성되지 않았습니다. 아래 AI 처리 결과를 확인한 뒤 같은 리포트로 다시 요청할 수 있습니다.'; await this.save(record); return; }
     const entries = [];
     for (const line of names.split('\n')) {
       const [status, file] = line.split('\t');
-      const tree = await this.execute('git', ['ls-files', '--stage', '--', file], { cwd: workspace });
+      const tree = await this.untrustedGit(workspace, ['ls-files', '--stage', '--', file]);
       const mode = status === 'D' ? '100644' : tree.slice(0, 6);
       entries.push({ status, path: file, mode });
       if (status !== 'D' && !(await lstat(path.join(workspace, file))).isFile()) throw new Error('일반 파일만 수정할 수 있습니다.');
     }
     assertAllowedChanges(entries);
-    const patch = await this.execute('git', ['diff', '--cached', '--binary', '--no-renames', '--no-ext-diff', '--no-textconv'], { cwd: workspace });
+    const patch = await this.untrustedGit(workspace, ['diff', '--cached', '--binary', '--no-renames', '--no-ext-diff', '--no-textconv']);
     if (Buffer.byteLength(patch) > 512 * 1024 || /GIT binary patch|old mode|new mode/.test(patch)) throw new Error('변경 크기 또는 파일 형식이 허용 범위를 벗어났습니다.');
     if (reports.some(r => r.report.description.trim().length >= 12 && patch.includes(r.report.description.trim()))) throw new Error('사용자의 비공개 설명이 수정 파일에 포함돼 공개를 중단했습니다.');
     record.patchDigest = digest(patch); record.files = entries;

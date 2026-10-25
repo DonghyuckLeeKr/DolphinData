@@ -15,7 +15,8 @@ export function dailyPlan(controller) {
     catch (error) { insufficient.push({ id: record.id, reason: controller.safeError(error) }); }
   }
   return { ids: eligible.slice(0, MAX_BATCH_REPORTS), remaining: Math.max(0, eligible.length - MAX_BATCH_REPORTS), insufficient,
-    excluded: records.filter(r => r.kind !== 'batch' && r.status === 'received' && r.autoProcessExcluded).length,
+    excluded: records.filter(r => r.kind !== 'batch' && r.status === 'received' && r.autoProcessExcluded && !r.triagePending).length,
+    awaitingTriage: records.filter(r => r.kind !== 'batch' && r.status === 'received' && r.triagePending).length,
     blockers: records.filter(r => activeStates.has(r.status) || (r.candidateSha && !['released', 'candidate-closed', 'retired'].includes(r.status))).map(r => r.id), busy: controller.busy };
 }
 

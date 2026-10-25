@@ -1,8 +1,8 @@
 // Notification service for desktop push notifications with per-profile tracking (Tauri & Web fallback)
 
-import { isTauriAvailable } from './networkTelemetry';
+import { isTauriAvailable } from './networkTelemetry.js';
 import { sendNotification, isPermissionGranted, requestPermission } from '@tauri-apps/api/notification';
-import { getTodayKey } from './storageService';
+import { getTodayKey } from './storageService.js';
 
 // Per-profile threshold tracking: { 'profile-1': { t80: false, t90: false, t95: false } }
 const profileNotifiedThresholds = {};
@@ -52,7 +52,25 @@ export const checkAndNotifyDailySurge = (todayGB, dailyLimitGB, profileName, pro
   }
 };
 
-export const checkAndNotifyThresholds = (usedGB, limitGB, carrierName, profileId = 'default') => {
+const THRESHOLD_ALERTS = [
+  {
+    key: 't95', percent: 95,
+    title: name => `[위험 95%] ${name} 한도 긴급 초과`,
+    body: usage => `현재 ${usage} 사용 중입니다. 곧 차단되거나 추가 요금이 부과될 수 있습니다.`
+  },
+  {
+    key: 't90', percent: 90,
+    title: name => `[경고 90%] ${name} 사용량 위험`,
+    body: usage => `현재 ${usage} 사용했습니다. 데이터를 절약해 주세요.`
+  },
+  {
+    key: 't80', percent: 80,
+    title: name => `[주의 80%] ${name} 사용량 달성`,
+    body: usage => `현재 ${usage} 사용했습니다.`
+  }
+];
+
+export const checkAndNotifyThresholds = (usedGB, limitGB, carrierName, profileId = 'default', alerts = {}, notify = sendOSNotification) => {
   if (!limitGB || limitGB <= 0) return;
   const percentage = (usedGB / limitGB) * 100;
 
@@ -62,24 +80,16 @@ export const checkAndNotifyThresholds = (usedGB, limitGB, carrierName, profileId
 
   const tracker = profileNotifiedThresholds[profileId];
 
-  if (percentage >= 95 && !tracker.t95) {
-    tracker.t95 = true;
-    sendOSNotification(
-      `[위험 95%] ${carrierName || '데이터 요금제'} 한도 긴급 초과`,
-      `현재 ${usedGB.toFixed(1)} GB / ${limitGB} GB (${percentage.toFixed(1)}%) 사용 중입니다. 곧 차단되거나 추가 요금이 부과될 수 있습니다.`
-    );
-  } else if (percentage >= 90 && !tracker.t90) {
-    tracker.t90 = true;
-    sendOSNotification(
-      `[경고 90%] ${carrierName || '데이터 요금제'} 사용량 위험`,
-      `현재 ${usedGB.toFixed(1)} GB / ${limitGB} GB (${percentage.toFixed(1)}%) 사용했습니다. 데이터를 절약해 주세요.`
-    );
-  } else if (percentage >= 80 && !tracker.t80) {
-    tracker.t80 = true;
-    sendOSNotification(
-      `[주의 80%] ${carrierName || '데이터 요금제'} 사용량 달성`,
-      `현재 ${usedGB.toFixed(1)} GB / ${limitGB} GB (${percentage.toFixed(1)}%) 사용했습니다.`
-    );
+  // Only the highest crossed level may notify; lower levels are consumed with it so they never follow in reverse order.
+  const crossedIndex = THRESHOLD_ALERTS.findIndex(alert => percentage >= alert.percent);
+  if (crossedIndex !== -1) {
+    const crossed = THRESHOLD_ALERTS.slice(crossedIndex);
+    const pending = crossed.find(alert => !tracker[alert.key] && alerts?.[alert.key] !== false);
+    crossed.forEach(alert => { tracker[alert.key] = true; });
+    if (pending) {
+      const usage = `${usedGB.toFixed(1)} GB / ${limitGB} GB (${percentage.toFixed(1)}%)`;
+      notify(pending.title(carrierName || '데이터 요금제'), pending.body(usage));
+    }
   }
 
   // Reset notification triggers if usage drops below 75% (e.g. after calibration/reset)
