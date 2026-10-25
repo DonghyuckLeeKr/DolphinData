@@ -111,6 +111,7 @@ export async function startDiscord(controller, config, token) {
         await controller.returnToQueue(id, `discord:${interaction.user.id}`, { keepBatch: true });
         await controller.startFix(id, `discord:${interaction.user.id}`);
       }
+      else if (action === 'include') await controller.setAutomatic(id, true, `discord:${interaction.user.id}`);
       else if (action === 'requeue') await controller.returnToQueue(id, `discord:${interaction.user.id}`);
       else if (action === 'approve') await controller.approveCode(id, { sha: expected, patchDigest: record.patchDigest, actor: `discord:${interaction.user.id}` });
       else if (action === 'publish') await controller.approveRelease(id, `discord:${interaction.user.id}`, Number(expected));

@@ -70,7 +70,8 @@ function renderReports(records) {
     }
     if (r.batchId) card.append(element('div', `일괄 수정 ${r.batchId.slice(0, 8)} · ${labels[r.batchStatus] || r.batchStatus} · 결과와 승인은 일괄 수정 카드에서 확인해주세요.`, 'details'));
     if (r.dailyRunDate) card.append(element('div', `${r.dailyRunDate} 일일 자동 수정으로 처리한 접수입니다.`, 'details'));
-    if (r.autoProcessExcluded) card.append(element('div', '일일 자동 처리에서 제외된 접수입니다.', 'details'));
+    if (r.triagePending) card.append(element('div', '검토 전 접수입니다. 내용을 확인한 뒤 일일 자동 처리에 포함해주세요.', 'details'));
+    else if (r.autoProcessExcluded) card.append(element('div', '일일 자동 처리에서 제외된 접수입니다.', 'details'));
     if (r.candidateSha) card.append(element('div', `검사할 코드: ${r.candidateSha}\n수정본 SHA256: ${r.patchDigest}`, 'details'));
     if (r.error) card.append(element('p', r.error, 'error'));
     if (r.aiSummary) { card.append(element('h4', 'AI 처리 결과'), element('div', r.aiSummary, 'description')); }

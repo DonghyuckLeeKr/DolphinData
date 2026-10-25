@@ -3,12 +3,13 @@
 
 use data_usage_counter::diagnostics::{collect_diagnostic_environment, DiagnosticEnvironment};
 use data_usage_counter::network_identity::{detect_current_network_identity, NetworkIdentity};
+use data_usage_counter::ping::{is_valid_ping_host, parse_ping_ms};
 use data_usage_counter::process_network::ProcessNetworkMonitor;
 use data_usage_counter::telemetry::{NetworkSampler, TelemetryData};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use sysinfo::{Pid, System};
 use tauri::{
     CustomMenuItem, LogicalSize, Manager, State, SystemTray, SystemTrayEvent, SystemTrayMenu,
@@ -416,32 +417,33 @@ fn get_top_processes(state: State<AppState>) -> ProcessActivitySnapshot {
 }
 
 #[tauri::command]
-fn run_ping_test(host: String) -> Result<u64, String> {
-    if host.is_empty()
-        || !host
-            .chars()
-            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | ':' | '-'))
-    {
+async fn run_ping_test(host: String) -> Result<u64, String> {
+    if !is_valid_ping_host(&host) {
         return Err("유효하지 않은 Ping 대상입니다.".to_string());
     }
+    // ping.exe blocks for up to the echo timeout; keep it off the UI thread.
+    tauri::async_runtime::spawn_blocking(move || ping_once(&host))
+        .await
+        .map_err(|error| error.to_string())?
+}
 
+fn ping_once(host: &str) -> Result<u64, String> {
     let mut command = std::process::Command::new("ping");
     #[cfg(target_os = "windows")]
     {
-        command.args(["-n", "1", "-w", "2000", &host]);
+        command.args(["-n", "1", "-w", "2000", host]);
         command.creation_flags(CREATE_NO_WINDOW);
     }
     #[cfg(not(target_os = "windows"))]
     {
-        command.args(["-c", "1", "-W", "2", &host]);
+        command.args(["-c", "1", "-W", "2", host]);
     }
 
-    let started = Instant::now();
     let output = command.output().map_err(|error| error.to_string())?;
-    if !output.status.success() {
-        return Err("Ping 대상에서 응답을 받지 못했습니다.".to_string());
-    }
-    Ok(started.elapsed().as_millis().max(1) as u64)
+    // Windows ping exits 0 for "Destination host unreachable", so require a real echo reply.
+    parse_ping_ms(&String::from_utf8_lossy(&output.stdout))
+        .filter(|_| output.status.success())
+        .ok_or_else(|| "Ping 대상에서 응답을 받지 못했습니다.".to_string())
 }
 
 #[tauri::command]
