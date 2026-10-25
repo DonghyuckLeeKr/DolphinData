@@ -106,7 +106,7 @@ function UpdateModal({ update, status, error, onInstall, onClose }) {
               <Sparkles size={15} color="var(--brand-color)" />
               <span>이번 업데이트 내용</span>
             </div>
-            <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.76rem', lineHeight: 1.65, whiteSpace: 'pre-line' }}>{notes}</p>
+            <p style={{ margin: 0, maxHeight: '190px', overflowY: 'auto', color: 'var(--text-main)', fontSize: '0.78rem', lineHeight: 1.7, whiteSpace: 'pre-line' }}>{notes}</p>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '9px', marginTop: '14px', color: 'var(--text-muted)', fontSize: '0.7rem', lineHeight: 1.55 }}>

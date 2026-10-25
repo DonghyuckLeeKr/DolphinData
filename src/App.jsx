@@ -49,6 +49,9 @@ import NetworkClassificationModal from './components/NetworkClassificationModal'
 import UpdateModal from './components/UpdateModal';
 import { checkForAppUpdate, installAppUpdate } from './services/updateService';
 
+const UPDATE_CHECK_INTERVAL_MS = 3 * 60 * 60 * 1000;
+const UPDATE_FOCUS_RECHECK_MS = 30 * 60 * 1000;
+
 export default function App() {
   const [config, setConfig] = useState(loadConfig);
   const [telemetry, setTelemetry] = useState({
@@ -76,6 +79,8 @@ export default function App() {
   const networkObservationRef = useRef({ fingerprint: '', count: 0, confirmed: false });
   const networkDetectionInFlightRef = useRef(false);
   const updateCheckStartedRef = useRef(false);
+  const lastUpdateCheckRef = useRef(0);
+  const dismissedUpdateVersionRef = useRef('');
   useEffect(() => {
     configRef.current = config;
   }, [config]);
@@ -141,16 +146,25 @@ export default function App() {
   }, [config.theme]);
 
   // Use an in-app Korean update dialog instead of Tauri's default English message box.
+  // The app usually lives in the tray for days, so checking only at launch meant a new
+  // release surfaced only after a restart. Check shortly after launch, every few hours,
+  // and when the window comes back into focus after a while.
   useEffect(() => {
     if (!isTauriAvailable() || updateCheckStartedRef.current) return undefined;
     updateCheckStartedRef.current = true;
     let cancelled = false;
+    let checking = false;
 
-    const timer = setTimeout(async () => {
+    const runCheck = async () => {
+      if (checking || cancelled) return;
+      checking = true;
+      lastUpdateCheckRef.current = Date.now();
       try {
         const result = await checkForAppUpdate();
-        if (!cancelled && result.shouldUpdate) {
-          setAvailableUpdate(result);
+        const version = result.manifest?.version;
+        // A version the user closed this session stays quiet until the next launch.
+        if (!cancelled && result.shouldUpdate && version !== dismissedUpdateVersionRef.current) {
+          setAvailableUpdate(previous => (previous?.manifest?.version === version ? previous : result));
           setConfig(prev => {
             if (!prev.miniMode) return prev;
             const updated = { ...prev, miniMode: false };
@@ -160,12 +174,23 @@ export default function App() {
         }
       } catch (error) {
         console.warn('Automatic update check failed', error);
+      } finally {
+        checking = false;
       }
-    }, 900);
+    };
+
+    const startupTimer = setTimeout(runCheck, 900);
+    const interval = setInterval(runCheck, UPDATE_CHECK_INTERVAL_MS);
+    const handleFocus = () => {
+      if (Date.now() - lastUpdateCheckRef.current >= UPDATE_FOCUS_RECHECK_MS) runCheck();
+    };
+    window.addEventListener('focus', handleFocus);
 
     return () => {
       cancelled = true;
-      clearTimeout(timer);
+      clearTimeout(startupTimer);
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
       updateCheckStartedRef.current = false;
     };
   }, []);
@@ -512,10 +537,11 @@ export default function App() {
 
   const handleCloseUpdate = useCallback(() => {
     if (updateStatus === 'installing' || updateStatus === 'restarting') return;
+    dismissedUpdateVersionRef.current = availableUpdate?.manifest?.version || '';
     setAvailableUpdate(null);
     setUpdateError('');
     setUpdateStatus('idle');
-  }, [updateStatus]);
+  }, [updateStatus, availableUpdate]);
 
   // Render Always-on-top Mini Gadget View if miniMode is active
   if (config.miniMode) {
