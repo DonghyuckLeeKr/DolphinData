@@ -55,6 +55,16 @@ export const updateTrayTooltip = async (tooltipText) => {
   }
 };
 
+export const setTrayIcon = async (rgba, size) => {
+  if (!isTauriAvailable()) return;
+  try {
+    const invoke = await getTauriInvoke();
+    if (invoke) await invoke('set_tray_icon', { rgba, width: size, height: size });
+  } catch (e) {
+    console.warn('Failed to update tray icon via Tauri', e);
+  }
+};
+
 export const setAutoStart = async (enable) => {
   if (isTauriAvailable()) {
     const invoke = await getTauriInvoke();

@@ -1,6 +1,7 @@
 import React, { useId, useMemo } from 'react';
 import { Edit3 } from 'lucide-react';
 import { forecastUsage } from '../services/usageForecast';
+import { DOLPHIN_BODY_PATH, DOLPHIN_FIN_PATH } from '../utils/dolphinShape';
 import './WaterLevelHero.css';
 
 // Water and accent colours per status live in WaterLevelHero.css so each theme can tune its contrast.
@@ -54,10 +55,10 @@ function Dolphin() {
       <path
         className="water-hero__dolphin-body"
         fill={`url(#${shadeId})`}
-        d="M48 6 C45 4 41 3 38 2 C37 -4 34 -8 28 -10 C20 -13 12 -14 6 -14 C2 -19 -2 -24 -6 -27 C-6 -22 -7 -16 -10 -12 C-20 -9 -30 -3 -37 4 C-41 0 -46 -3 -51 -3 C-48 1 -46 5 -45 8 C-48 11 -50 14 -51 17 C-46 15 -41 12 -37 10 C-28 11 -15 10 -2 10 C14 10 28 10 38 9 C42 8 46 8 48 6 Z"
+        d={DOLPHIN_BODY_PATH}
       />
       <path className="water-hero__dolphin-belly" d="M44 7.5 C36 8.5 24 9.5 8 9.6 C-8 9.8 -22 10 -34 9.5 C-24 6 -8 4.5 8 4.5 C22 4.5 34 5 44 7.5 Z" />
-      <path className="water-hero__dolphin-body" fill={`url(#${shadeId})`} d="M14 9 C12 15 8 19 3 21 C6 16 8 12 9 10 Z" />
+      <path className="water-hero__dolphin-body" fill={`url(#${shadeId})`} d={DOLPHIN_FIN_PATH} />
       <path d="M47 6.4 C43 6.2 40 6.6 36.5 7.6" fill="none" stroke="rgba(8, 24, 48, 0.55)" strokeWidth="0.9" strokeLinecap="round" />
       <circle cx="31" cy="-1.5" r="1.7" fill="#0b1b33" />
       <circle cx="31.6" cy="-2.1" r="0.5" fill="#fff" />
