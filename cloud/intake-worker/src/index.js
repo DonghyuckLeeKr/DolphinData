@@ -40,8 +40,9 @@ class D1Store {
 // Optional Discord webhook so the operator hears about a report even while the PC is off.
 // It carries no report content: descriptions stay private until the PC imports them.
 const notifier = env => async () => {
-  if (!env.DISCORD_WEBHOOK_URL) return;
-  await fetch(env.DISCORD_WEBHOOK_URL, {
+  const webhook = env.DISCORD_WEBHOOK_URL?.trim();
+  if (!webhook) return;
+  await fetch(webhook, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ content: '새 문제 신고가 접수되어 대기 중입니다. PC 자동화가 실행되면 가져옵니다.', allowed_mentions: { parse: [] } })

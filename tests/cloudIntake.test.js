@@ -87,3 +87,9 @@ test('only the admin token can list and delete pending reports', async () => {
   assert.equal((await handleRequest(admin(`/v1/admin/reports/${receiptId}`, { method: 'DELETE' }), env, { store })).status, 204);
   assert.equal(store.reports.length, 0);
 });
+
+test('an admin token stored with a trailing newline still matches', async () => {
+  const store = new MemoryStore();
+  const response = await handleRequest(admin('/v1/admin/reports'), { ADMIN_TOKEN: `${ADMIN_TOKEN}\r\n` }, { store });
+  assert.equal(response.status, 200);
+});
