@@ -1,0 +1,15 @@
+name = "dolphindata-intake"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+# Created with `wrangler d1 create dolphindata-intake`; fill in the id it prints.
+[[d1_databases]]
+binding = "DB"
+database_name = "dolphindata-intake"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+
+# Secrets, set with `wrangler secret put <NAME>` (never committed):
+#   ADMIN_TOKEN          bearer token the operator's PC uses to pull and delete reports (64 hex chars)
+#   RATE_SALT            random salt for hashing client addresses
+#   DISCORD_WEBHOOK_URL  optional; posts a content-free "new report" notice
