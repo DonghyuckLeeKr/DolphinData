@@ -46,18 +46,25 @@
 - `automation/Start-Automation.cmd` 더블클릭. 처음에는 봇 라이브러리를 설치하고 관리자 브라우저를 자동으로 엽니다. HTML 파일을 직접 열거나 미리보기로 보면 실제 목록에 연결되지 않습니다. 실행 창의 로컬 주소에는 임시 관리자 키가 있으므로 공유하지 않습니다. 같은 탭에서 새로고침해도 인증이 유지되며 서버를 다시 시작한 뒤에는 새 실행 창의 주소를 사용합니다.
 - `npm run automation`으로 디스코드 없이 관리자 화면만 실행할 수도 있습니다.
 
-파일과 수정본은 `%LOCALAPPDATA%\DolphinData\automation`에 보관합니다. 관리자 서버는 `127.0.0.1:4174`, 접수 전용 서버는 `127.0.0.1:4175`입니다. PC가 꺼져 있거나 도구가 종료되면 리포트 접수와 버튼 처리는 중단됩니다. GitHub 검사는 계속되며 재실행하면 결과를 확인합니다. 진행 중 로컬 수정이 중단되면 자동 재시도하지 않습니다.
+파일과 수정본은 `%LOCALAPPDATA%\DolphinData\automation`에 보관합니다. 관리자 서버는 `127.0.0.1:4174`, 접수 전용 서버는 `127.0.0.1:4175`입니다. PC가 꺼져 있거나 도구가 종료되면 리포트는 Cloudflare 대기열에 쌓이고, 디스코드 버튼 처리와 자동 수정은 다시 실행할 때까지 멈춥니다. GitHub 검사는 계속되며 재실행하면 결과를 확인합니다. 진행 중 로컬 수정이 중단되면 자동 재시도하지 않습니다.
 
-## 다른 사용자 PC에서 자동 접수
+## 다른 사용자 PC에서 자동 접수 (Cloudflare Worker)
 
-- 관리자가 `automation/Enable-FreeIntake.cmd`를 한 번 실행합니다. Cloudflare 공식 릴리스의 SHA256을 검증하고 연결 도구를 관리자 PC에 설치합니다. 봇 토큰이나 관리자 키는 앱에 넣지 않습니다.
-- `Start-Automation.cmd`를 실행하면 접수 전용 포트만 무료 Quick Tunnel에 연결합니다. `4174` 관리자 화면·목록·수정·승인 기능은 외부 연결하지 않습니다.
-- 연결이 확인되면 GitHub CLI로 main의 `support/diagnostic-intake.json` 파일만 갱신합니다. 이 파일에는 공개 HTTPS 접수 주소만 있습니다. 앱은 매 접수 시 이 주소를 다시 확인하므로 연결 도구 재시작으로 주소가 바뀌어도 새 설치파일이 필요하지 않습니다. GitHub 로그인과 이 파일의 쓰기 권한이 필요합니다.
-- 이 파일 갱신도 main 커밋을 만들므로 자동 수정 중에는 도구를 재시작하지 않는 것이 좋습니다. 기준 main이 바뀌면 기존 수정본 승인은 거절되며 새 요청이 필요합니다.
-- Quick Tunnel은 초기 운영과 테스트용이며 가동 시간을 보장하지 않습니다. 고정 주소와 상시 운영이 필요해지면 Cloudflare 계정·도메인의 정식 터널 또는 별도 접수 서버로 전환해야 합니다. [공식 안내](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/).
-- 접수 API는 256KB 이하의 엄격한 진단 형식만 받고 분당 30건·동시 4건으로 제한합니다. 성공하면 리포트 내용이 없는 접수 번호만 반환합니다. 접수만으로 자동 수정이나 배포는 실행하지 않습니다.
-- 같은 리포트의 재전송은 저장·디스코드 카드 한 건으로 처리합니다. 전송 실패 시 앱에 익명화한 리포트를 보관하며, 다음 실행에서도 ‘다시 접수’를 누를 수 있습니다.
-- 자동 접수가 계속 실패하면 앱에서 백업 JSON을 저장해 `donghyucklee.kr@gmail.com`으로 첨부해 전달할 수 있습니다.
+- 설치된 앱은 앱에 고정된 Cloudflare Worker 주소(`cloud/intake-worker`)로 접수합니다. Worker는 항상 켜져 있어 이 PC가 꺼져 있어도 접수가 가능하고, 리포트는 Cloudflare D1 대기열에 보관됩니다.
+- 이 PC의 자동화 도구가 실행 중이면 1분마다 대기열을 확인해 리포트를 가져오고, 저장이 끝난 리포트는 Worker에서 삭제합니다. 가져온 리포트는 **검토 전** 상태라 관리자가 포함해야 일일 자동 처리에 들어갑니다.
+- Worker는 256KB 이하의 엄격한 진단 형식만 받고, 접속 주소별로 10분에 6건까지 받습니다(주소는 솔트를 넣은 해시로만 저장). 대기열이 300건을 넘으면 새 접수를 잠시 거절합니다. 같은 리포트를 다시 보내면 처음 받은 접수 번호를 돌려줍니다.
+- 관리자 API(`/v1/admin/...`)는 `ADMIN_TOKEN`이 있어야 하며, 가져오기와 삭제만 할 수 있습니다. `DISCORD_WEBHOOK_URL`을 설정하면 접수 사실만(내용 없이) 디스코드로 알립니다.
+- 앱의 접수 주소는 앱 코드(`src-tauri/src/diagnostic_intake.rs`)에 고정되어 있어, 더 이상 main에 주소 파일을 커밋하지 않습니다. 개발 빌드만 이 PC의 `127.0.0.1:4175` 접수 서버를 우선 사용합니다.
+- 전송 실패 시 앱에 익명화한 리포트를 보관하며, 다음 실행에서도 ‘다시 접수’를 누를 수 있습니다. 자동 접수가 계속 실패하면 앱에서 백업 JSON을 저장해 `donghyucklee.kr@gmail.com`으로 첨부해 전달할 수 있습니다.
+
+### Worker 배포 (처음 한 번)
+
+1. Cloudflare에서 이 작업용 API 토큰을 만듭니다. 권한: Account → Workers Scripts 편집, D1 편집 (계정 하나로 한정). 토큰은 채팅이나 파일에 붙여 넣지 말고 터미널 환경변수 `CLOUDFLARE_API_TOKEN`으로만 설정합니다.
+2. `cloud/intake-worker`에서 `npx wrangler@4.52.0 d1 create dolphindata-intake`를 실행하고, 출력된 `database_id`를 `wrangler.toml`에 넣습니다.
+3. `npx wrangler@4.52.0 d1 execute dolphindata-intake --remote --file=schema.sql`로 테이블을 만듭니다.
+4. 비밀값 설정: `npx wrangler@4.52.0 secret put ADMIN_TOKEN`(64자 무작위 값), `RATE_SALT`(무작위 값), 선택 `DISCORD_WEBHOOK_URL`.
+5. `npx wrangler@4.52.0 deploy`로 배포하고, 출력된 `https://dolphindata-intake.<서브도메인>.workers.dev` 주소를 앱 코드의 `PUBLIC_ENDPOINT`에 넣어 새 버전을 배포합니다.
+6. 이 PC에서 `automation/Set-CloudIntake.cmd`를 실행해 Worker 주소와 `ADMIN_TOKEN`을 저장합니다. 토큰은 Windows DPAPI로 암호화되고 AI 수정 프로세스에는 전달되지 않습니다.
 
 ## 디스코드 설정
 
@@ -67,7 +74,7 @@
 4. `automation/Set-Discord.cmd` 더블클릭. 토큰은 화면에 표시되지 않는 보안 입력으로 받고 Windows DPAPI로 암호화해 이 PC에 저장합니다. 토큰을 채팅·소스·GitHub 이슈에 붙여 넣지 않습니다.
 5. `automation/Start-Automation.cmd` 더블클릭. 봇이 지정 서버의 `/dolphin-report`, `/dolphin-batch` 명령을 등록합니다. 파일 접수, 개별·일괄 수정, 수정 승인, 배포 승인을 이 채널에서 진행합니다.
 
-단순 Discord webhook은 알림만 지원합니다. 승인 버튼은 Gateway 봇 연결을 사용합니다. 앱의 외부 자동 접수는 별도의 접수 전용 터널을 사용하며 공유기 포트 개방은 필요하지 않습니다. 모바일 디스코드에서도 승인 버튼을 누를 수 있습니다.
+단순 Discord webhook은 알림만 지원합니다. 승인 버튼은 Gateway 봇 연결을 사용합니다. 앱의 외부 자동 접수는 Cloudflare Worker를 사용하며 공유기 포트 개방은 필요하지 않습니다. 모바일 디스코드에서도 승인 버튼을 누를 수 있습니다.
 
 ## 데이터 범위 및 검증 한계
 

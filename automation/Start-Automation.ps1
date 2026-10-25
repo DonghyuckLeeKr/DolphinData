@@ -9,6 +9,13 @@ if (!(Test-Path -LiteralPath (Join-Path $PSScriptRoot 'node_modules\discord.js')
     try { & npm.cmd ci; if ($LASTEXITCODE -ne 0) { throw '자동화 도구 설치에 실패했습니다.' } } finally { Pop-Location }
 }
 try {
+    $cloudTokenPath = Join-Path $taskStore 'cloud-intake-token.dpapi'
+    if (Test-Path -LiteralPath $cloudTokenPath) {
+        $secureCloudToken = Get-Content -LiteralPath $cloudTokenPath -Raw | ConvertTo-SecureString
+        $cloudTokenPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureCloudToken)
+        try { $env:DOLPHIN_CLOUD_INTAKE_TOKEN = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($cloudTokenPointer) }
+        finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($cloudTokenPointer) }
+    }
     if (Test-Path -LiteralPath $taskTokenPath) {
         $secureTaskToken = Get-Content -LiteralPath $taskTokenPath -Raw | ConvertTo-SecureString
         $taskTokenPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureTaskToken)
@@ -33,4 +40,7 @@ try {
             $taskEncryptedAccess = $null
         }
     }
-} finally { Remove-Item Env:\DOLPHIN_DISCORD_TOKEN -ErrorAction SilentlyContinue }
+} finally {
+    Remove-Item Env:\DOLPHIN_DISCORD_TOKEN -ErrorAction SilentlyContinue
+    Remove-Item Env:\DOLPHIN_CLOUD_INTAKE_TOKEN -ErrorAction SilentlyContinue
+}

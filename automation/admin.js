@@ -40,7 +40,9 @@ function renderStatus(status) {
   for (const [label, good, text] of [['자동 수정', status.codex, status.codex ? 'Codex 로그인 확인' : 'Codex 로그인 필요'],
     ['GitHub 검사·배포', status.previewWorkflow && status.releaseApproval, status.previewWorkflow && status.releaseApproval ? '검사 작업·승인자 설정 확인' : 'main 반영·승인자 설정 필요'],
     ['디스코드', status.discord.connected, status.discord.connected ? '봇 연결됨' : status.discord.error || '연결 설정 대기'],
-    ['외부 앱 접수', status.publicIntake?.connected, status.publicIntake?.connected ? '무료 인터넷 접수 연결됨' : status.publicIntake?.error || '연결 설정 대기']]) {
+    ['클라우드 접수', status.cloudIntake?.connected, status.cloudIntake?.connected
+      ? `대기열 확인됨 · 이번 실행에서 ${status.cloudIntake.imported}건 가져옴`
+      : status.cloudIntake?.error || '설정 대기']]) {
     const card = element('div', '', 'connection'); card.append(element('span', label), element('strong', text, good ? 'good' : 'pending')); target.append(card);
   }
 }
