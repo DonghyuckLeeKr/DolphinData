@@ -5,6 +5,8 @@ import {
   saveConfig,
   getActiveProfile,
   calculateTotalUsedGB,
+  getDailyHistoryGB,
+  isDashboardCardVisible,
   getTodayKey,
   addDailyUsageBytes,
   MAX_PROFILES,
@@ -28,6 +30,7 @@ import Header from './components/Header';
 import ProfileTabBar from './components/ProfileTabBar';
 import QuickStatsStrip from './components/QuickStatsStrip';
 import QuotaRingCard from './components/QuotaRingCard';
+import WaterLevelHero from './components/WaterLevelHero';
 import TrafficTimeSeriesChart from './components/TrafficTimeSeriesChart';
 import LiveSpeedCard from './components/LiveSpeedCard';
 import PingTestCard from './components/PingTestCard';
@@ -36,6 +39,7 @@ import MiniGadget from './components/MiniGadget';
 import TitleBar from './components/TitleBar';
 import CalibrationModal from './components/CalibrationModal';
 import SettingsModal from './components/SettingsModal';
+import ReportModal from './components/ReportModal';
 import DailyHistoryModal from './components/DailyHistoryModal';
 import NetworkClassificationModal from './components/NetworkClassificationModal';
 import UpdateModal from './components/UpdateModal';
@@ -55,6 +59,7 @@ export default function App() {
   const [historyData, setHistoryData] = useState([]);
   const [showCalibration, setShowCalibration] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showReport, setShowReport] = useState(false);
   const [showDailyHistory, setShowDailyHistory] = useState(false);
   const [pendingNetworkFingerprint, setPendingNetworkFingerprint] = useState('');
   const [availableUpdate, setAvailableUpdate] = useState(null);
@@ -513,6 +518,7 @@ export default function App() {
           networkBinding={activeNetworkBinding}
           onOpenDailyHistory={() => setShowDailyHistory(true)}
           onOpenSettings={() => setShowSettings(true)}
+          onOpenReport={() => setShowReport(true)}
           onToggleMiniGadget={handleToggleMiniGadget}
           onSelectTheme={handleSelectTheme}
           telemetry={telemetry}
@@ -535,42 +541,59 @@ export default function App() {
           networkBinding={activeNetworkBinding}
         />
 
-        {/* 2-Column Responsive Dashboard Layout */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(460px, 1fr))',
-          gap: '18px',
-          alignItems: 'start'
-        }}>
-          
-          {/* Left Column: Data Quota & Rolling Traffic Graph */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-            <QuotaRingCard
-              profile={activeProfile}
-              config={config}
-              networkBinding={activeNetworkBinding}
-              onOpenNetworkSettings={() => setShowSettings(true)}
-              onOpenCalibration={() => setShowCalibration(true)}
-            />
-            <TrafficTimeSeriesChart
-              historyData={historyData}
-              unitMode={config.unitMode}
-              profile={activeNetworkBinding}
-            />
-          </div>
+        {/* The selected plan's water level and forecast lead the dashboard, independent of the current network */}
+        <WaterLevelHero
+          profile={activeProfile}
+          usedGB={calculateTotalUsedGB(activeProfile)}
+          dailyGB={getDailyHistoryGB(config, activeProfile?.id)}
+          downloadSpeed={activeNetworkBinding?.meteringMode === 'metered' ? telemetry.downloadSpeed : 0}
+          uploadSpeed={activeNetworkBinding?.meteringMode === 'metered' ? telemetry.uploadSpeed : 0}
+          onOpenCalibration={() => setShowCalibration(true)}
+        />
 
-          {/* Right Column: Speed Meters, Latency Ping, App Usage */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-            <LiveSpeedCard
-              telemetry={telemetry}
-              unitMode={config.unitMode}
-            />
-            <PingTestCard profile={activeNetworkBinding} />
-            <AppBreakdownCard
-            />
-          </div>
-
-        </div>
+        {/* 2-Column Responsive Dashboard Layout; hidden cards unmount so their polling stops too */}
+        {(() => {
+          const showCard = cardId => isDashboardCardVisible(config, cardId);
+          const leftColumn = [
+            activeNetworkBinding?.meteringMode !== 'metered' && (
+              <QuotaRingCard
+                key="network-state"
+                profile={activeProfile}
+                config={config}
+                networkBinding={activeNetworkBinding}
+                onOpenNetworkSettings={() => setShowSettings(true)}
+                onOpenCalibration={() => setShowCalibration(true)}
+              />
+            ),
+            showCard('traffic') && (
+              <TrafficTimeSeriesChart
+                key="traffic"
+                historyData={historyData}
+                unitMode={config.unitMode}
+                profile={activeNetworkBinding}
+              />
+            )
+          ].filter(Boolean);
+          const rightColumn = [
+            showCard('speed') && <LiveSpeedCard key="speed" telemetry={telemetry} unitMode={config.unitMode} />,
+            showCard('ping') && <PingTestCard key="ping" profile={activeNetworkBinding} />,
+            showCard('processes') && <AppBreakdownCard key="processes" />
+          ].filter(Boolean);
+          const columns = [leftColumn, rightColumn].filter(column => column.length > 0);
+          if (columns.length === 0) return null;
+          return (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(460px, 1fr))',
+              gap: '18px',
+              alignItems: 'start'
+            }}>
+              {columns.map((column, index) => (
+                <div key={index} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>{column}</div>
+              ))}
+            </div>
+          );
+        })()}
 
       </div>
 
@@ -582,6 +605,10 @@ export default function App() {
           onSave={handleUpdateActiveProfile}
           onClose={() => setShowCalibration(false)}
         />
+      )}
+
+      {showReport && (
+        <ReportModal config={config} onClose={() => setShowReport(false)} />
       )}
 
       {showDailyHistory && (
@@ -605,6 +632,7 @@ export default function App() {
             setConfig(normalized);
             saveConfig(normalized);
           }}
+          onOpenReport={() => { setShowSettings(false); setShowReport(true); }}
           onClose={() => setShowSettings(false)}
         />
       )}

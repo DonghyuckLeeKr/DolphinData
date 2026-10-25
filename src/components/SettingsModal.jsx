@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, memo } from 'react';
-import { X, Check, Settings, Download, Upload, FileText, Power, Wifi, Info, Mail, ShieldCheck } from 'lucide-react';
+import React, { useState, useEffect, useRef, useId, memo } from 'react';
+import { X, Check, Settings, Download, Upload, FileText, Power, Wifi, Info, Mail, ShieldCheck, LifeBuoy } from 'lucide-react';
 import { open } from '@tauri-apps/api/shell';
 import { setAutoStart, getAutoStart, isRunningAsAdmin, isTauriAvailable } from '../services/networkTelemetry';
 import { getInstalledAppVersion } from '../services/updateService';
@@ -7,7 +7,15 @@ import { getNetworkDisplayInfo } from '../utils/networkDisplay';
 import { buildSupportMailto, SUPPORT_EMAIL } from '../utils/appMetadata';
 import { MAX_BACKUP_FILE_BYTES, parseBackupConfig } from '../services/backupService';
 import { createCsvRow } from '../utils/csvSecurity';
-import DiagnosticPanel from './DiagnosticPanel';
+import { DASHBOARD_CARDS } from '../services/storageService';
+import useModalA11y from '../hooks/useModalA11y';
+
+const SETTINGS_TABS = [
+  { id: 'general', label: '일반' },
+  { id: 'network', label: '네트워크·요금제' },
+  { id: 'data', label: '데이터' },
+  { id: 'about', label: '정보' }
+];
 
 function SettingsModal({
   config,
@@ -17,11 +25,18 @@ function SettingsModal({
   onRunAsAdmin,
   onSaveNetworkBinding,
   onImportConfig,
+  onOpenReport,
   onClose
 }) {
+  const dialogRef = useRef(null);
+  const tabsId = useId();
+  const [activeTab, setActiveTab] = useState('general');
+  useModalA11y(dialogRef, onClose);
   const [meteringMode, setMeteringMode] = useState(networkBinding?.meteringMode || 'unclassified');
   const [boundProfileId, setBoundProfileId] = useState(networkBinding?.profileId || activeProfile?.id || '');
   const [unitMode, setUnitMode] = useState(config?.unitMode || 'MBs');
+  const [dashboardMode, setDashboardMode] = useState(config?.dashboardMode === 'simple' ? 'simple' : 'detailed');
+  const [hiddenCards, setHiddenCards] = useState(() => new Set(config?.hiddenCards || []));
   const [autoStartEnabled, setAutoStartEnabled] = useState(Boolean(config?.autoStart));
   const [runningAsAdmin, setRunningAsAdmin] = useState(false);
   const [relaunchingAsAdmin, setRelaunchingAsAdmin] = useState(false);
@@ -93,6 +108,8 @@ function SettingsModal({
     } : null;
     const configUpdates = {
       unitMode,
+      dashboardMode,
+      hiddenCards: [...hiddenCards],
       autoStart: autoStartEnabled,
       dailySurgeLimitGB: Math.max(0.5, parseFloat(dailySurgeLimit) || 5)
     };
@@ -240,346 +257,402 @@ function SettingsModal({
     reader.readAsText(file);
   };
 
+  const handleTabKeyDown = (event) => {
+    const index = SETTINGS_TABS.findIndex(tab => tab.id === activeTab);
+    const offset = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+    if (!offset) return;
+    event.preventDefault();
+    const next = SETTINGS_TABS[(index + offset + SETTINGS_TABS.length) % SETTINGS_TABS.length];
+    setActiveTab(next.id);
+    document.getElementById(`${tabsId}-${next.id}`)?.focus();
+  };
+
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: 'rgba(5, 10, 24, 0.82)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 9999,
-        padding: '16px'
-      }}
-    >
+    <div className="modal-overlay" onClick={onClose}>
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={`${tabsId}-title`}
+        className="modal-panel"
         onClick={(e) => e.stopPropagation()}
-        style={{
-          width: '100%',
-          maxWidth: '520px',
-          padding: '24px',
-          position: 'relative',
-          maxHeight: '90vh',
-          overflowY: 'auto',
-          background: 'var(--bg-primary)',
-          borderRadius: '16px',
-          border: '1px solid var(--glass-border)',
-          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.7)'
-        }}
       >
-        
-        {/* Top Close Button */}
-        <button
-          type="button"
-          onClick={onClose}
-          style={{
-            position: 'absolute',
-            top: '18px',
-            right: '18px',
-            background: 'none',
-            border: 'none',
-            color: 'var(--text-muted)',
-            cursor: 'pointer',
-            padding: '4px'
-          }}
-        >
+        <button type="button" className="modal-close" onClick={onClose} aria-label="닫기">
           <X size={20} />
         </button>
 
-        {/* Modal Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '18px' }}>
-          <div style={{
-            width: '38px',
-            height: '38px',
-            borderRadius: '10px',
-            background: 'var(--brand-badge-bg)',
-            border: '1px solid var(--brand-badge-border)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--brand-color)'
-          }}>
-            <Settings size={20} />
-          </div>
+        <div className="modal-heading">
+          <div className="modal-heading__icon"><Settings size={20} /></div>
           <div>
-            <h2 style={{ fontSize: '1.15rem', fontWeight: '700', color: 'var(--text-main)' }}>환경 설정 & 데이터 백업</h2>
-            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              자동 실행, 네트워크별 과금 방식, 일일 경고 및 백업/복원을 관리합니다.
-            </p>
+            <h2 id={`${tabsId}-title`}>환경 설정</h2>
+            <p>실행 방식, 네트워크별 과금, 백업과 앱 정보를 관리합니다.</p>
           </div>
+        </div>
+
+        <div className="settings-tabs" role="tablist" aria-label="설정 분류">
+          {SETTINGS_TABS.map(tab => (
+            <button
+              key={tab.id}
+              id={`${tabsId}-${tab.id}`}
+              type="button"
+              role="tab"
+              className="settings-tab"
+              aria-selected={activeTab === tab.id}
+              aria-controls={`${tabsId}-${tab.id}-panel`}
+              tabIndex={activeTab === tab.id ? 0 : -1}
+              data-autofocus={activeTab === tab.id ? true : undefined}
+              onClick={() => setActiveTab(tab.id)}
+              onKeyDown={handleTabKeyDown}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           
-          {/* Windows Auto-Start Toggle Row */}
-          <div
-            onClick={() => setAutoStartEnabled(prev => !prev)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '12px 14px',
-              background: 'var(--glass-card)',
-              border: '1px solid var(--glass-border-light)',
-              borderRadius: '10px',
-              cursor: 'pointer',
-              userSelect: 'none'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <Power size={18} color="var(--brand-color)" />
-              <div>
-                <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-main)', display: 'block' }}>
-                  윈도우 부팅 시 자동 실행
-                </span>
-                <span style={{ fontSize: '0.73rem', color: 'var(--text-muted)' }}>
-                  PC 시작 시 시스템 트레이에 백그라운드로 자동 실행됩니다.
-                </span>
-              </div>
-            </div>
-
-            <input
-              type="checkbox"
-              checked={autoStartEnabled}
-              onChange={(e) => setAutoStartEnabled(e.target.checked)}
-              onClick={(e) => e.stopPropagation()}
-              style={{ width: '18px', height: '18px', accentColor: 'var(--brand-color)', cursor: 'pointer' }}
-            />
-          </div>
-
-          {/* Optional elevation for process-level network diagnostics */}
-          <div style={{ padding: '12px 14px', background: 'var(--glass-card)', border: '1px solid var(--glass-border-light)', borderRadius: '10px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-              <ShieldCheck size={18} color="var(--brand-color)" />
-              <div>
-                <span style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-main)' }}>관리자 권한 실행</span>
-                <span style={{ display: 'block', fontSize: '0.73rem', color: 'var(--text-muted)' }}>
-                  부팅 시에는 일반 권한으로 실행됩니다. 필요할 때만 Windows의 권한 확인 후 다시 엽니다.
-                </span>
-              </div>
-            </div>
-            <button
-              type="button"
-              className="glass-btn"
-              onClick={handleRunAsAdmin}
-              disabled={!isTauriAvailable() || runningAsAdmin || relaunchingAsAdmin}
-              style={{ minHeight: '44px', width: '100%', justifyContent: 'center', cursor: runningAsAdmin || relaunchingAsAdmin ? 'default' : 'pointer' }}
-            >
-              <ShieldCheck size={16} />
-              <span>{runningAsAdmin ? '현재 관리자 권한으로 실행 중' : relaunchingAsAdmin ? 'Windows 권한 확인 대기 중…' : '관리자 권한으로 다시 실행'}</span>
-            </button>
-            {adminLaunchError && <p role="alert" style={{ margin: '8px 0 0', fontSize: '0.76rem', color: 'var(--accent-red, #f87171)' }}>{adminLaunchError}</p>}
-          </div>
-
-          {/* Daily Surge Limiter */}
-          <div>
-            <label style={{ fontSize: '0.82rem', fontWeight: '600', color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
-              일일 데이터 폭주 방지 경고 한도 (GB)
-            </label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <input
-                type="number"
-                step="0.5"
-                min="0.5"
-                max="100"
-                value={dailySurgeLimit}
-                onChange={(e) => setDailySurgeLimit(e.target.value)}
-                className="glass-input"
-                style={{ width: '120px' }}
-                required
-              />
-              <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-muted)' }}>GB / 일</span>
-            </div>
-            <span style={{ fontSize: '0.73rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
-              하루에 이 용량을 초과하여 소비할 경우 윈도우 푸시 알림으로 경고합니다.
-            </span>
-          </div>
-
-          {/* Current network identity and quota mapping */}
-          <div>
-            <label style={{ fontSize: '0.82rem', fontWeight: '600', color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
-              현재 네트워크의 사용량 처리
-            </label>
-            {networkBinding ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <div style={{ padding: '10px 12px', borderRadius: '10px', background: 'var(--glass-card)', border: '1px solid var(--glass-border-light)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Wifi size={16} color="var(--brand-color)" />
-                    <b style={{ color: 'var(--text-main)', fontSize: '0.84rem' }}>{networkBinding.networkName || '알 수 없는 네트워크'}</b>
-                    <span style={{ color: 'var(--accent-blue)', fontSize: '0.72rem' }}>{networkDisplay.label}</span>
+          <div role="tabpanel" id={`${tabsId}-${activeTab}-panel`} aria-labelledby={`${tabsId}-${activeTab}`} className="settings-panel">
+            {activeTab === 'general' && (
+              <>
+    {/* Windows Auto-Start Toggle Row */}
+              <div
+                onClick={() => setAutoStartEnabled(prev => !prev)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '12px 14px',
+                  background: 'var(--glass-card)',
+                  border: '1px solid var(--glass-border-light)',
+                  borderRadius: '10px',
+                  cursor: 'pointer',
+                  userSelect: 'none'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Power size={18} color="var(--brand-color)" />
+                  <div>
+                    <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-main)', display: 'block' }}>
+                      윈도우 부팅 시 자동 실행
+                    </span>
+                    <span style={{ fontSize: '0.73rem', color: 'var(--text-muted)' }}>
+                      PC 시작 시 시스템 트레이에 백그라운드로 자동 실행됩니다.
+                    </span>
                   </div>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.71rem', display: 'block', marginTop: '4px' }}>
-                    자동 선택된 물리 어댑터: {networkBinding.interfaceName || '확인 중'}
-                  </span>
                 </div>
 
-                <select
-                  value={meteringMode}
-                  onChange={(e) => setMeteringMode(e.target.value)}
-                  className="glass-input"
-                  style={{ color: 'var(--text-main)', width: '100%', cursor: 'pointer' }}
+                <input
+                  type="checkbox"
+                  checked={autoStartEnabled}
+                  onChange={(e) => setAutoStartEnabled(e.target.checked)}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ width: '18px', height: '18px', accentColor: 'var(--brand-color)', cursor: 'pointer' }}
+                />
+              </div>
+    {/* Optional elevation for process-level network diagnostics */}
+              <div style={{ padding: '12px 14px', background: 'var(--glass-card)', border: '1px solid var(--glass-border-light)', borderRadius: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                  <ShieldCheck size={18} color="var(--brand-color)" />
+                  <div>
+                    <span style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-main)' }}>관리자 권한 실행</span>
+                    <span style={{ display: 'block', fontSize: '0.73rem', color: 'var(--text-muted)' }}>
+                      부팅 시에는 일반 권한으로 실행됩니다. 필요할 때만 Windows의 권한 확인 후 다시 엽니다.
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="glass-btn"
+                  onClick={handleRunAsAdmin}
+                  disabled={!isTauriAvailable() || runningAsAdmin || relaunchingAsAdmin}
+                  style={{ minHeight: '44px', width: '100%', justifyContent: 'center', cursor: runningAsAdmin || relaunchingAsAdmin ? 'default' : 'pointer' }}
                 >
-                  <option value="unclassified" style={{ background: 'var(--bg-primary)' }}>정보 등록 필요 (누적 보류)</option>
-                  <option value="metered" style={{ background: 'var(--bg-primary)' }}>데이터 한도 차감 네트워크</option>
-                  <option value="unmetered" style={{ background: 'var(--bg-primary)' }}>무제한 네트워크 (집·회사 Wi-Fi)</option>
-                  <option value="ignored" style={{ background: 'var(--bg-primary)' }}>측정 제외</option>
-                </select>
-
-                {meteringMode === 'metered' && (
-                  <select
-                    value={boundProfileId}
-                    onChange={(e) => setBoundProfileId(e.target.value)}
-                    className="glass-input"
-                    style={{ color: 'var(--text-main)', width: '100%', cursor: 'pointer' }}
-                    required
+                  <ShieldCheck size={16} />
+                  <span>{runningAsAdmin ? '현재 관리자 권한으로 실행 중' : relaunchingAsAdmin ? 'Windows 권한 확인 대기 중…' : '관리자 권한으로 다시 실행'}</span>
+                </button>
+                {adminLaunchError && <p role="alert" style={{ margin: '8px 0 0', fontSize: '0.76rem', color: 'var(--accent-red, #f87171)' }}>{adminLaunchError}</p>}
+              </div>
+    {/* Unit Toggle */}
+              <div>
+                <label style={{ fontSize: '0.82rem', fontWeight: '600', color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
+                  속도 표기 단위
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setUnitMode('MBs')}
+                    className="glass-btn"
+                    style={{
+                      justifyContent: 'center',
+                      background: unitMode === 'MBs' ? 'var(--brand-badge-bg)' : undefined,
+                      borderColor: unitMode === 'MBs' ? 'var(--brand-color)' : undefined,
+                      color: unitMode === 'MBs' ? 'var(--brand-color)' : 'var(--text-main)',
+                      fontWeight: unitMode === 'MBs' ? 700 : 500,
+                      cursor: 'pointer'
+                    }}
                   >
-                    {(config?.profiles || []).map(profile => (
-                      <option key={profile.id} value={profile.id} style={{ background: 'var(--bg-primary)' }}>
-                        {profile.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-
-                <span style={{ fontSize: '0.73rem', color: 'var(--text-muted)', display: 'block' }}>
-                  {modeDescriptions[meteringMode]}
-                </span>
-              </div>
-            ) : (
-              <div style={{ padding: '10px 12px', borderRadius: '10px', background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.28)', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                연결된 네트워크를 확인 중입니다. 네트워크가 인식되면 여기서 요금제 연결 여부를 지정할 수 있습니다.
-              </div>
-            )}
-          </div>
-
-          {/* Unit Toggle */}
-          <div>
-            <label style={{ fontSize: '0.82rem', fontWeight: '600', color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
-              속도 표기 단위
-            </label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-              <button
-                type="button"
-                onClick={() => setUnitMode('MBs')}
-                className="glass-btn"
-                style={{
-                  justifyContent: 'center',
-                  background: unitMode === 'MBs' ? 'var(--brand-badge-bg)' : undefined,
-                  borderColor: unitMode === 'MBs' ? 'var(--brand-color)' : undefined,
-                  color: unitMode === 'MBs' ? 'var(--brand-color)' : 'var(--text-main)',
-                  fontWeight: unitMode === 'MBs' ? 700 : 500,
-                  cursor: 'pointer'
-                }}
-              >
-                MB/s (초당 메가바이트)
-              </button>
-              <button
-                type="button"
-                onClick={() => setUnitMode('Mbps')}
-                className="glass-btn"
-                style={{
-                  justifyContent: 'center',
-                  background: unitMode === 'Mbps' ? 'var(--brand-badge-bg)' : undefined,
-                  borderColor: unitMode === 'Mbps' ? 'var(--brand-color)' : undefined,
-                  color: unitMode === 'Mbps' ? 'var(--brand-color)' : 'var(--text-main)',
-                  fontWeight: unitMode === 'Mbps' ? 700 : 500,
-                  cursor: 'pointer'
-                }}
-              >
-                Mbps (초당 메가비트)
-              </button>
-            </div>
-          </div>
-
-          {/* Backup and Report Controls */}
-          <div>
-            <label style={{ fontSize: '0.82rem', fontWeight: '600', color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
-              데이터 백업 및 리포트
-            </label>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
-              {/* CSV Report Export */}
-              <button
-                type="button"
-                onClick={handleExportCSV}
-                className="glass-btn"
-                style={{ justifyContent: 'center', fontSize: '0.78rem', cursor: 'pointer' }}
-                title="엑셀에서 한글 깨짐 없이 열 수 있는 CSV 리포트를 내보냅니다."
-              >
-                <FileText size={14} color="var(--accent-emerald)" />
-                <span>CSV 리포트</span>
-              </button>
-
-              {/* JSON Settings Export */}
-              <button
-                type="button"
-                onClick={handleExportJSON}
-                className="glass-btn"
-                style={{ justifyContent: 'center', fontSize: '0.78rem', cursor: 'pointer' }}
-                title="모든 요금제 프로필과 설정을 JSON 파일로 백업합니다."
-              >
-                <Download size={14} color="var(--accent-blue)" />
-                <span>설정 내보내기</span>
-              </button>
-            </div>
-
-            {/* JSON Settings Import */}
-            <div>
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleImportJSON}
-                accept=".json"
-                style={{ display: 'none' }}
-              />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="glass-btn"
-                style={{ width: '100%', justifyContent: 'center', fontSize: '0.78rem', borderColor: 'rgba(167, 139, 250, 0.3)', color: 'var(--accent-purple)', cursor: 'pointer' }}
-                title="이전에 백업해 둔 설정(JSON) 파일을 불러와 복원합니다."
-              >
-                <Upload size={14} />
-                <span>설정 파일(.json) 불러오기 및 복원</span>
-              </button>
-            </div>
-          </div>
-
-          <DiagnosticPanel config={config} admin={runningAsAdmin} />
-
-          {/* Application version and support contact */}
-          <div>
-            <label style={{ fontSize: '0.82rem', fontWeight: '600', color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
-              앱 정보 및 문의
-            </label>
-            <div style={{ display: 'grid', gridTemplateColumns: '0.8fr 1.4fr', gap: '8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '9px', minHeight: '54px', padding: '10px 12px', borderRadius: '10px', background: 'var(--glass-card)', border: '1px solid var(--glass-border-light)' }}>
-                <Info size={17} color="var(--brand-color)" />
-                <div>
-                  <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.68rem' }}>현재 버전</span>
-                  <strong style={{ color: 'var(--text-main)', fontSize: '0.84rem' }}>{displayedAppVersion}</strong>
+                    MB/s (초당 메가바이트)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUnitMode('Mbps')}
+                    className="glass-btn"
+                    style={{
+                      justifyContent: 'center',
+                      background: unitMode === 'Mbps' ? 'var(--brand-badge-bg)' : undefined,
+                      borderColor: unitMode === 'Mbps' ? 'var(--brand-color)' : undefined,
+                      color: unitMode === 'Mbps' ? 'var(--brand-color)' : 'var(--text-main)',
+                      fontWeight: unitMode === 'Mbps' ? 700 : 500,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Mbps (초당 메가비트)
+                  </button>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={handleOpenSupportEmail}
-                className="glass-btn"
-                aria-label={`문의 메일 보내기: ${SUPPORT_EMAIL}`}
-                title="기본 메일 앱으로 문의 메일을 작성합니다."
-                style={{ minHeight: '54px', justifyContent: 'flex-start', padding: '10px 12px', cursor: 'pointer', overflow: 'hidden' }}
-              >
-                <Mail size={17} color="var(--accent-emerald)" style={{ flex: '0 0 auto' }} />
-                <span style={{ minWidth: 0, textAlign: 'left' }}>
-                  <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.68rem', fontWeight: 500 }}>개발자 문의</span>
-                  <strong style={{ display: 'block', color: 'var(--text-main)', fontSize: '0.76rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{SUPPORT_EMAIL}</strong>
+    {/* Dashboard layout: a simple/detailed preset plus per-card visibility for the detailed view */}
+              <div>
+                <label style={{ fontSize: '0.82rem', fontWeight: '600', color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
+                  대시보드 보기
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  {[
+                    { id: 'simple', label: '간단히', hint: '남은 데이터와 속도만' },
+                    { id: 'detailed', label: '자세히', hint: '선택한 카드 모두' }
+                  ].map(option => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      aria-pressed={dashboardMode === option.id}
+                      onClick={() => setDashboardMode(option.id)}
+                      className="glass-btn"
+                      style={{
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '2px',
+                        background: dashboardMode === option.id ? 'var(--brand-badge-bg)' : undefined,
+                        borderColor: dashboardMode === option.id ? 'var(--brand-color)' : undefined,
+                        color: dashboardMode === option.id ? 'var(--brand-color)' : 'var(--text-main)',
+                        fontWeight: dashboardMode === option.id ? 700 : 500,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <span>{option.label}</span>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 500 }}>{option.hint}</span>
+                    </button>
+                  ))}
+                </div>
+                {dashboardMode === 'detailed' && (
+                  <fieldset style={{ border: 'none', padding: 0, margin: '10px 0 0', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '6px 12px' }}>
+                    <legend style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginBottom: '6px', padding: 0 }}>
+                      표시할 카드 · 남은 데이터 화면은 항상 맨 위에 표시됩니다.
+                    </legend>
+                    {DASHBOARD_CARDS.map(card => (
+                      <label key={card.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', color: 'var(--text-main)', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={!hiddenCards.has(card.id)}
+                          onChange={event => setHiddenCards(previous => {
+                            const next = new Set(previous);
+                            if (event.target.checked) next.delete(card.id);
+                            else next.add(card.id);
+                            return next;
+                          })}
+                        />
+                        {card.label}
+                      </label>
+                    ))}
+                  </fieldset>
+                )}
+              </div>
+              </>
+            )}
+            {activeTab === 'network' && (
+              <>
+    {/* Current network identity and quota mapping */}
+              <div>
+                <label style={{ fontSize: '0.82rem', fontWeight: '600', color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
+                  현재 네트워크의 사용량 처리
+                </label>
+                {networkBinding ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ padding: '10px 12px', borderRadius: '10px', background: 'var(--glass-card)', border: '1px solid var(--glass-border-light)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Wifi size={16} color="var(--brand-color)" />
+                        <b style={{ color: 'var(--text-main)', fontSize: '0.84rem' }}>{networkBinding.networkName || '알 수 없는 네트워크'}</b>
+                        <span style={{ color: 'var(--accent-blue)', fontSize: '0.72rem' }}>{networkDisplay.label}</span>
+                      </div>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.71rem', display: 'block', marginTop: '4px' }}>
+                        자동 선택된 물리 어댑터: {networkBinding.interfaceName || '확인 중'}
+                      </span>
+                    </div>
+
+                    <select
+                      value={meteringMode}
+                      onChange={(e) => setMeteringMode(e.target.value)}
+                      className="glass-input"
+                      style={{ color: 'var(--text-main)', width: '100%', cursor: 'pointer' }}
+                    >
+                      <option value="unclassified" style={{ background: 'var(--bg-primary)' }}>정보 등록 필요 (누적 보류)</option>
+                      <option value="metered" style={{ background: 'var(--bg-primary)' }}>데이터 한도 차감 네트워크</option>
+                      <option value="unmetered" style={{ background: 'var(--bg-primary)' }}>무제한 네트워크 (집·회사 Wi-Fi)</option>
+                      <option value="ignored" style={{ background: 'var(--bg-primary)' }}>측정 제외</option>
+                    </select>
+
+                    {meteringMode === 'metered' && (
+                      <select
+                        value={boundProfileId}
+                        onChange={(e) => setBoundProfileId(e.target.value)}
+                        className="glass-input"
+                        style={{ color: 'var(--text-main)', width: '100%', cursor: 'pointer' }}
+                        required
+                      >
+                        {(config?.profiles || []).map(profile => (
+                          <option key={profile.id} value={profile.id} style={{ background: 'var(--bg-primary)' }}>
+                            {profile.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+
+                    <span style={{ fontSize: '0.73rem', color: 'var(--text-muted)', display: 'block' }}>
+                      {modeDescriptions[meteringMode]}
+                    </span>
+                  </div>
+                ) : (
+                  <div style={{ padding: '10px 12px', borderRadius: '10px', background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.28)', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                    연결된 네트워크를 확인 중입니다. 네트워크가 인식되면 여기서 요금제 연결 여부를 지정할 수 있습니다.
+                  </div>
+                )}
+              </div>
+    {/* Daily Surge Limiter */}
+              <div>
+                <label style={{ fontSize: '0.82rem', fontWeight: '600', color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
+                  일일 데이터 폭주 방지 경고 한도 (GB)
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0.5"
+                    max="100"
+                    value={dailySurgeLimit}
+                    onChange={(e) => setDailySurgeLimit(e.target.value)}
+                    className="glass-input"
+                    style={{ width: '120px' }}
+                    required
+                  />
+                  <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-muted)' }}>GB / 일</span>
+                </div>
+                <span style={{ fontSize: '0.73rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
+                  하루에 이 용량을 초과하여 소비할 경우 윈도우 푸시 알림으로 경고합니다.
                 </span>
-              </button>
-            </div>
+              </div>
+              </>
+            )}
+            {activeTab === 'data' && (
+              <>
+    {/* Backup and Report Controls */}
+              <div>
+                <label style={{ fontSize: '0.82rem', fontWeight: '600', color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
+                  데이터 백업 및 리포트
+                </label>
+            
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                  {/* CSV Report Export */}
+                  <button
+                    type="button"
+                    onClick={handleExportCSV}
+                    className="glass-btn"
+                    style={{ justifyContent: 'center', fontSize: '0.78rem', cursor: 'pointer' }}
+                    title="엑셀에서 한글 깨짐 없이 열 수 있는 CSV 리포트를 내보냅니다."
+                  >
+                    <FileText size={14} color="var(--accent-emerald)" />
+                    <span>CSV 리포트</span>
+                  </button>
+
+                  {/* JSON Settings Export */}
+                  <button
+                    type="button"
+                    onClick={handleExportJSON}
+                    className="glass-btn"
+                    style={{ justifyContent: 'center', fontSize: '0.78rem', cursor: 'pointer' }}
+                    title="모든 요금제 프로필과 설정을 JSON 파일로 백업합니다."
+                  >
+                    <Download size={14} color="var(--accent-blue)" />
+                    <span>설정 내보내기</span>
+                  </button>
+                </div>
+
+                {/* JSON Settings Import */}
+                <div>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleImportJSON}
+                    accept=".json"
+                    style={{ display: 'none' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="glass-btn"
+                    style={{ width: '100%', justifyContent: 'center', fontSize: '0.78rem', borderColor: 'rgba(167, 139, 250, 0.3)', color: 'var(--accent-purple)', cursor: 'pointer' }}
+                    title="이전에 백업해 둔 설정(JSON) 파일을 불러와 복원합니다."
+                  >
+                    <Upload size={14} />
+                    <span>설정 파일(.json) 불러오기 및 복원</span>
+                  </button>
+                </div>
+              </div>
+              </>
+            )}
+            {activeTab === 'about' && (
+              <>
+    {/* Application version and support contact */}
+              <div>
+                <label style={{ fontSize: '0.82rem', fontWeight: '600', color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
+                  앱 정보 및 문의
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: '0.8fr 1.4fr', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '9px', minHeight: '54px', padding: '10px 12px', borderRadius: '10px', background: 'var(--glass-card)', border: '1px solid var(--glass-border-light)' }}>
+                    <Info size={17} color="var(--brand-color)" />
+                    <div>
+                      <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.68rem' }}>현재 버전</span>
+                      <strong style={{ color: 'var(--text-main)', fontSize: '0.84rem' }}>{displayedAppVersion}</strong>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleOpenSupportEmail}
+                    className="glass-btn"
+                    aria-label={`문의 메일 보내기: ${SUPPORT_EMAIL}`}
+                    title="기본 메일 앱으로 문의 메일을 작성합니다."
+                    style={{ minHeight: '54px', justifyContent: 'flex-start', padding: '10px 12px', cursor: 'pointer', overflow: 'hidden' }}
+                  >
+                    <Mail size={17} color="var(--accent-emerald)" style={{ flex: '0 0 auto' }} />
+                    <span style={{ minWidth: 0, textAlign: 'left' }}>
+                      <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.68rem', fontWeight: 500 }}>개발자 문의</span>
+                      <strong style={{ display: 'block', color: 'var(--text-main)', fontSize: '0.76rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{SUPPORT_EMAIL}</strong>
+                    </span>
+                  </button>
+                </div>
+              </div>
+              {/* Problem reports moved to their own window; keep a way in from here */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '12px 14px', background: 'var(--glass-card)', border: '1px solid var(--glass-border-light)', borderRadius: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <LifeBuoy size={18} color="var(--brand-color)" />
+                  <div>
+                    <span style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-main)' }}>문제 신고</span>
+                    <span style={{ display: 'block', fontSize: '0.73rem', color: 'var(--text-muted)' }}>문제가 생긴 순간을 기록해 개발자에게 보냅니다.</span>
+                  </div>
+                </div>
+                <button type="button" className="glass-btn" onClick={onOpenReport} style={{ flex: '0 0 auto', cursor: 'pointer' }}>
+                  신고 창 열기
+                </button>
+              </div>
+              </>
+            )}
           </div>
 
           {/* Buttons */}
