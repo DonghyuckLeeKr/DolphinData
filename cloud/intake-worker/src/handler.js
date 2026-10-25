@@ -88,7 +88,8 @@ export async function handleRequest(request, env, { store, now = Date.now(), not
   }
 
   if (url.pathname.startsWith('/v1/admin/')) {
-    if (!sameSecret(request.headers.get('Authorization')?.replace(/^Bearer /, ''), env.ADMIN_TOKEN)) {
+    // Secrets piped into `wrangler secret put` can carry a trailing newline.
+    if (!sameSecret(request.headers.get('Authorization')?.replace(/^Bearer /, ''), env.ADMIN_TOKEN?.trim())) {
       return json(401, { error: 'unauthorized' });
     }
     if (url.pathname === '/v1/admin/reports' && request.method === 'GET') {
