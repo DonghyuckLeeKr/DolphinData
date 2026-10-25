@@ -1,8 +1,10 @@
 // Dev-only playground for WaterLevelHero with synthetic plans; not part of the app bundle.
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import WaterLevelHero from '../components/WaterLevelHero';
 import { getBillingWindow } from '../services/usageForecast';
 import { getTodayKey } from '../services/storageService';
+import { forecastUsage } from '../services/usageForecast';
+import { drawTrayGauge } from '../services/trayGauge';
 
 const PRESETS = {
   safe: { label: '여유', usedPercent: 22, speed: 0.05 },
@@ -26,6 +28,40 @@ const buildHistory = (usedGB, now) => {
   }));
 };
 
+// Draws the tray icon at real Windows tray sizes on dark and light taskbar backgrounds.
+function TrayIconPreview({ gauge }) {
+  const refs = useRef([]);
+  const sizes = [16, 24, 32];
+  useEffect(() => {
+    refs.current.forEach(canvas => {
+      if (!canvas) return;
+      const size = Number(canvas.dataset.size);
+      const ratio = window.devicePixelRatio || 1;
+      canvas.width = size * ratio;
+      canvas.height = size * ratio;
+      drawTrayGauge(canvas.getContext('2d'), size * ratio, gauge);
+    });
+  }, [gauge]);
+  return (
+    <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginTop: 18, fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+      <b style={{ color: 'var(--text-main)' }}>트레이 아이콘</b>
+      {['#1f1f1f', '#f3f3f3'].map((background, row) => (
+        <div key={background} style={{ display: 'flex', gap: 14, alignItems: 'center', padding: '8px 14px', borderRadius: 8, background }}>
+          {sizes.map((size, index) => (
+            <canvas
+              key={size}
+              data-size={size}
+              ref={element => { refs.current[row * sizes.length + index] = element; }}
+              style={{ width: size, height: size }}
+              title={`${size}px`}
+            />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function HeroPreview() {
   const [usedPercent, setUsedPercent] = useState(PRESETS.over.usedPercent);
   const [speedMB, setSpeedMB] = useState(PRESETS.over.speed);
@@ -33,6 +69,10 @@ export default function HeroPreview() {
   const now = useMemo(() => new Date(), []);
   const usedGB = (LIMIT_GB * usedPercent) / 100;
   const dailyGB = useMemo(() => buildHistory(usedGB, now), [usedGB, now]);
+  const gauge = useMemo(() => {
+    const forecast = forecastUsage({ usedGB, limitGB: LIMIT_GB, resetDay: RESET_DAY, dailyGB, now });
+    return { remainingRatio: forecast.remainingGB / LIMIT_GB, status: forecast.status };
+  }, [usedGB, dailyGB, now]);
 
   const applyTheme = value => { setTheme(value); document.documentElement.setAttribute('data-theme', value); };
 
@@ -68,6 +108,7 @@ export default function HeroPreview() {
           onOpenCalibration={() => {}}
           now={now}
         />
+        <TrayIconPreview gauge={gauge} />
       </div>
     </div>
   );

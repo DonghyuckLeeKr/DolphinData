@@ -18,9 +18,12 @@ import {
   fetchRealtimeStats,
   isTauriAvailable,
   relaunchAsAdmin,
+  setTrayIcon,
   setWindowMiniMode,
   updateTrayTooltip
 } from './services/networkTelemetry';
+import { forecastUsage } from './services/usageForecast';
+import { renderTrayGaugeRgba, trayGaugeKey, TRAY_ICON_SIZE } from './services/trayGauge';
 import { disconnectNetworkProfile, getActiveNetworkBinding, reconcileNetworkProfile, updateNetworkBinding } from './services/networkProfileService';
 import { advanceNetworkObservation } from './services/networkObservation';
 import { diagnosticRecorder } from './services/diagnosticService';
@@ -104,6 +107,25 @@ export default function App() {
 
   const activeProfile = getActiveProfile(config);
   const activeNetworkBinding = getActiveNetworkBinding(config);
+
+  // Tray icon mirrors the dashboard hero: same plan, same forecast status, quantised water level
+  const trayForecast = forecastUsage({
+    usedGB: calculateTotalUsedGB(activeProfile),
+    limitGB: Number(activeProfile?.monthlyLimitGB) || 100,
+    resetDay: activeProfile?.resetDay || 1,
+    dailyGB: getDailyHistoryGB(config, activeProfile?.id)
+  });
+  const trayGauge = {
+    remainingRatio: trayForecast.limitGB > 0 ? trayForecast.remainingGB / trayForecast.limitGB : 0,
+    status: trayForecast.status
+  };
+  const trayKey = trayGaugeKey(trayGauge);
+  const trayGaugeRef = useRef(trayGauge);
+  trayGaugeRef.current = trayGauge;
+  useEffect(() => {
+    if (!isTauriAvailable()) return;
+    setTrayIcon(renderTrayGaugeRgba(trayGaugeRef.current, TRAY_ICON_SIZE), TRAY_ICON_SIZE);
+  }, [trayKey]);
 
   // Sync theme attribute to document root element
   useEffect(() => {

@@ -260,6 +260,37 @@ fn update_tray_tooltip(tooltip: String, app_handle: tauri::AppHandle) {
     let _ = app_handle.tray_handle().set_tooltip(&tooltip);
 }
 
+// The frontend renders the water-level gauge; only small square RGBA images are accepted.
+const MAX_TRAY_ICON_SIZE: u32 = 64;
+
+fn validate_tray_icon(rgba: &[u8], width: u32, height: u32) -> Result<(), String> {
+    if width == 0 || width != height || width > MAX_TRAY_ICON_SIZE {
+        return Err("트레이 아이콘 크기가 올바르지 않습니다.".to_string());
+    }
+    if rgba.len() != (width * height * 4) as usize {
+        return Err("트레이 아이콘 데이터 길이가 올바르지 않습니다.".to_string());
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn set_tray_icon(
+    rgba: Vec<u8>,
+    width: u32,
+    height: u32,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    validate_tray_icon(&rgba, width, height)?;
+    app_handle
+        .tray_handle()
+        .set_icon(tauri::Icon::Rgba {
+            rgba,
+            width,
+            height,
+        })
+        .map_err(|error| error.to_string())
+}
+
 #[tauri::command]
 fn set_auto_start(enable: bool) -> Result<bool, String> {
     #[cfg(target_os = "windows")]
@@ -560,6 +591,7 @@ fn main() {
             run_ping_test,
             set_mini_mode,
             update_tray_tooltip,
+            set_tray_icon,
             set_auto_start,
             get_auto_start,
             is_running_as_admin,
@@ -567,4 +599,22 @@ fn main() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_tray_icon;
+
+    #[test]
+    fn tray_icon_accepts_small_square_rgba() {
+        assert!(validate_tray_icon(&vec![0; 32 * 32 * 4], 32, 32).is_ok());
+    }
+
+    #[test]
+    fn tray_icon_rejects_bad_shapes() {
+        assert!(validate_tray_icon(&vec![0; 32 * 32 * 4 - 1], 32, 32).is_err());
+        assert!(validate_tray_icon(&vec![0; 32 * 16 * 4], 32, 16).is_err());
+        assert!(validate_tray_icon(&vec![0; 128 * 128 * 4], 128, 128).is_err());
+        assert!(validate_tray_icon(&[], 0, 0).is_err());
+    }
 }
