@@ -24,6 +24,7 @@ import {
 } from './services/networkTelemetry';
 import { forecastUsage } from './services/usageForecast';
 import { renderTrayGaugeRgba, trayGaugeKey, TRAY_ICON_SIZE } from './services/trayGauge';
+import useBalancedColumns from './hooks/useBalancedColumns';
 import { disconnectNetworkProfile, getActiveNetworkBinding, reconcileNetworkProfile, updateNetworkBinding } from './services/networkProfileService';
 import { advanceNetworkObservation } from './services/networkObservation';
 import { diagnosticRecorder } from './services/diagnosticService';
@@ -120,6 +121,13 @@ export default function App() {
     status: trayForecast.status
   };
   const trayKey = trayGaugeKey(trayGauge);
+
+  // Dashboard cards below the hero, split into two columns of similar measured height
+  const visibleCardIds = [
+    activeNetworkBinding?.meteringMode !== 'metered' && 'network-state',
+    ...['traffic', 'speed', 'ping', 'processes'].filter(cardId => isDashboardCardVisible(config, cardId))
+  ].filter(Boolean);
+  const { columns: dashboardColumns, measureRef } = useBalancedColumns(visibleCardIds);
   const trayGaugeRef = useRef(trayGauge);
   trayGaugeRef.current = trayGauge;
   useEffect(() => {
@@ -574,12 +582,10 @@ export default function App() {
         />
 
         {/* 2-Column Responsive Dashboard Layout; hidden cards unmount so their polling stops too */}
-        {(() => {
-          const showCard = cardId => isDashboardCardVisible(config, cardId);
-          const leftColumn = [
-            activeNetworkBinding?.meteringMode !== 'metered' && (
+        {dashboardColumns.length > 0 && (() => {
+          const cards = {
+            'network-state': (
               <QuotaRingCard
-                key="network-state"
                 profile={activeProfile}
                 config={config}
                 networkBinding={activeNetworkBinding}
@@ -587,22 +593,11 @@ export default function App() {
                 onOpenCalibration={() => setShowCalibration(true)}
               />
             ),
-            showCard('traffic') && (
-              <TrafficTimeSeriesChart
-                key="traffic"
-                historyData={historyData}
-                unitMode={config.unitMode}
-                profile={activeNetworkBinding}
-              />
-            )
-          ].filter(Boolean);
-          const rightColumn = [
-            showCard('speed') && <LiveSpeedCard key="speed" telemetry={telemetry} unitMode={config.unitMode} />,
-            showCard('ping') && <PingTestCard key="ping" profile={activeNetworkBinding} />,
-            showCard('processes') && <AppBreakdownCard key="processes" />
-          ].filter(Boolean);
-          const columns = [leftColumn, rightColumn].filter(column => column.length > 0);
-          if (columns.length === 0) return null;
+            traffic: <TrafficTimeSeriesChart historyData={historyData} unitMode={config.unitMode} profile={activeNetworkBinding} />,
+            speed: <LiveSpeedCard telemetry={telemetry} unitMode={config.unitMode} />,
+            ping: <PingTestCard profile={activeNetworkBinding} />,
+            processes: <AppBreakdownCard />
+          };
           return (
             <div style={{
               display: 'grid',
@@ -610,8 +605,10 @@ export default function App() {
               gap: '18px',
               alignItems: 'start'
             }}>
-              {columns.map((column, index) => (
-                <div key={index} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>{column}</div>
+              {dashboardColumns.map((ids, index) => (
+                <div key={index} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                  {ids.map(id => <div key={id} ref={measureRef(id)}>{cards[id]}</div>)}
+                </div>
               ))}
             </div>
           );
