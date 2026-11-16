@@ -5,8 +5,7 @@ use std::time::Duration;
 
 // Always-on Cloudflare intake. Compiled in, so no remote file or report can redirect
 // submissions; the operator's PC pulls reports from this queue when it runs.
-const PUBLIC_ENDPOINT: &str =
-    "https://dolphindata-intake.REPLACE_WITH_WORKERS_SUBDOMAIN.workers.dev/v1/reports";
+const PUBLIC_ENDPOINT: &str = "https://dolphindata-intake.donghyucklee-kr.workers.dev/v1/reports";
 // Development builds also accept the automation server on this PC.
 #[cfg(debug_assertions)]
 const LOCAL_ENDPOINT: &str = "http://127.0.0.1:4175/v1/reports";
