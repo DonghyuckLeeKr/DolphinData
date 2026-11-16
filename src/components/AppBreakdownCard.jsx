@@ -35,7 +35,7 @@ export default function AppBreakdownCard() {
   }, [loadProcesses]);
 
   const handleKill = async (pid, name) => {
-    if (!window.confirm(`프로세스 '${name}' (PID: ${pid})을(를) 강제 종료하시겠습니까? 저장하지 않은 작업이 사라질 수 있습니다.`)) return;
+    if (!window.confirm(`프로세스 '${name}' (PID: ${pid})을(를) 종료할까요? 저장하지 않은 작업은 사라질 수 있습니다.`)) return;
     const success = await terminateProcess(pid);
     if (success) setProcesses(prev => prev.filter(process => process.pid !== pid));
   };
@@ -50,7 +50,7 @@ export default function AppBreakdownCard() {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <h3 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-main)' }}>
-              {isEtw ? '프로세스별 네트워크 사용량' : '활성 프로세스 리소스'}
+              {isEtw ? '프로그램별 데이터 사용량' : '실행 중인 프로그램'}
             </h3>
             <span style={{
               fontSize: '0.7rem', fontWeight: '700', padding: '2px 8px', borderRadius: '12px',
@@ -60,13 +60,13 @@ export default function AppBreakdownCard() {
               display: 'flex', alignItems: 'center', gap: '4px'
             }}>
               {isEtw ? <CheckCircle2 size={11} /> : <TriangleAlert size={11} />}
-              {isEtw ? 'Windows ETW 실제 값' : 'CPU·메모리 폴백'}
+              {isEtw ? '실제 데이터 사용량' : 'CPU·메모리로 표시 중'}
             </span>
           </div>
           <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
             {isEtw
-              ? '모든 어댑터의 앱별 다운로드·업로드를 우선 표시하며 CPU와 메모리는 보조 정보입니다.'
-              : '일반 권한에서는 CPU 사용률을 우선 표시하고 메모리를 함께 확인합니다.'}
+              ? '프로그램마다 받고 보낸 데이터를 보여 줍니다. CPU와 메모리는 참고용입니다.'
+              : '프로그램별 데이터는 관리자 권한에서만 볼 수 있어, 지금은 CPU·메모리 순으로 보여 줍니다.'}
           </p>
         </div>
 
@@ -74,10 +74,10 @@ export default function AppBreakdownCard() {
           {isEtw ? (
             <>
               <button onClick={() => setSortMode('network')} className="glass-btn" style={{ padding: '4px 8px', fontSize: '0.72rem', color: activeSortMode === 'network' ? 'var(--brand-color)' : undefined }}>
-                현재 속도순
+                지금 속도순
               </button>
               <button onClick={() => setSortMode('session')} className="glass-btn" style={{ padding: '4px 8px', fontSize: '0.72rem', color: activeSortMode === 'session' ? 'var(--brand-color)' : undefined }}>
-                실행 후 누적순
+                누적순
               </button>
             </>
           ) : (
@@ -102,17 +102,17 @@ export default function AppBreakdownCard() {
           background: 'rgba(251, 191, 36, 0.08)', border: '1px solid rgba(251, 191, 36, 0.24)'
         }}>
           <div style={{ fontWeight: '700' }}>
-            {collectionError || '일반 권한에서는 프로세스별 네트워크 수집이 제한됩니다.'}
+            {collectionError || '프로그램별 데이터 사용량은 관리자 권한에서만 볼 수 있습니다.'}
           </div>
           <div style={{ marginTop: '4px', color: 'var(--text-muted)', lineHeight: '1.45' }}>
-            현재는 CPU·메모리 기준으로 표시합니다. 실제 네트워크 사용량 확인: ① 트레이의 돌핀 데이터 아이콘 우클릭 → 종료 ② 시작 메뉴 또는 바로가기의 돌핀 데이터 우클릭 → 관리자 권한으로 실행
+            환경 설정 → 일반 → '관리자 권한으로 다시 실행'을 누르면 바로 볼 수 있습니다.
           </div>
         </div>
       )}
 
       {sortedProcesses.length === 0 ? (
         <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-          데스크톱 앱에서 실행하면 활성 프로세스 정보가 표시됩니다.
+          데스크톱 앱에서 실행하면 프로그램 목록이 나옵니다.
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>

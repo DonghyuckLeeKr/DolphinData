@@ -627,11 +627,8 @@ export default function App() {
           const cards = {
             'network-state': (
               <QuotaRingCard
-                profile={activeProfile}
-                config={config}
                 networkBinding={activeNetworkBinding}
                 onOpenNetworkSettings={() => setShowSettings(true)}
-                onOpenCalibration={() => setShowCalibration(true)}
               />
             ),
             traffic: <TrafficTimeSeriesChart historyData={historyData} unitMode={config.unitMode} profile={activeNetworkBinding} />,

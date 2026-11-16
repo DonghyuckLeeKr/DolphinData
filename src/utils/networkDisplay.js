@@ -31,30 +31,30 @@ export const getNetworkDisplayInfo = (networkMetadata = {}) => {
     return {
       kind,
       label: 'Wi-Fi',
-      trafficDescription: 'Wi-Fi 연결의 실시간 송수신량',
-      pingTitle: 'Wi-Fi 지연시간 (Ping) 측정'
+      trafficDescription: 'Wi-Fi로 주고받는 양',
+      pingTitle: 'Wi-Fi 응답 속도 (Ping)'
     };
   }
   if (kind === 'mobile-router') {
     return {
       kind,
       label: '모바일 라우터',
-      trafficDescription: '모바일 라우터 연결의 실시간 송수신량',
-      pingTitle: '모바일 라우터 지연시간 (Ping) 측정'
+      trafficDescription: '모바일 라우터로 주고받는 양',
+      pingTitle: '모바일 라우터 응답 속도 (Ping)'
     };
   }
   if (kind === 'ethernet') {
     return {
       kind,
       label: '유선 네트워크',
-      trafficDescription: '유선 네트워크의 실시간 송수신량',
-      pingTitle: '유선 네트워크 지연시간 (Ping) 측정'
+      trafficDescription: '유선으로 주고받는 양',
+      pingTitle: '유선 응답 속도 (Ping)'
     };
   }
   return {
     kind,
     label: '네트워크',
-    trafficDescription: '현재 네트워크의 실시간 송수신량',
-    pingTitle: '네트워크 지연시간 (Ping) 측정'
+    trafficDescription: '지금 네트워크로 주고받는 양',
+    pingTitle: '응답 속도 (Ping)'
   };
 };

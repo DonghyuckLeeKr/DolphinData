@@ -31,9 +31,9 @@ export default function PingTestCard({ profile }) {
     const minPing = Math.min(...results);
     const jitter = maxPing - minPing;
 
-    let status = '우수 (Excellent)';
-    if (avgPing > 80) status = '지연 높음 (High Latency)';
-    else if (avgPing > 50) status = '양호 (Good)';
+    let status = '좋음';
+    if (avgPing > 80) status = '느림';
+    else if (avgPing > 50) status = '보통';
 
     setPingResult({
       pingMs: avgPing,
@@ -56,7 +56,7 @@ export default function PingTestCard({ profile }) {
           style={{ padding: '6px 12px', fontSize: '0.75rem' }}
         >
           {testing ? <RefreshCw size={14} className="spin" /> : <Play size={14} />}
-          <span>{testing ? '측정 중...' : 'Ping 재측정'}</span>
+          <span>{testing ? '측정 중...' : '다시 재기'}</span>
         </button>
       </div>
 
@@ -69,7 +69,7 @@ export default function PingTestCard({ profile }) {
         </div>
 
         <div style={{ background: 'var(--glass-card)', padding: '14px', borderRadius: '12px', textAlign: 'center', border: '1px solid var(--glass-border-light)' }}>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Jitter (변동)</span>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>흔들림 (Jitter)</span>
           <div style={{ fontSize: '1.4rem', fontWeight: '800', color: 'var(--accent-blue)' }}>
             {pingResult ? pingResult.jitterMs : '--'} <span style={{ fontSize: '0.8rem' }}>ms</span>
           </div>

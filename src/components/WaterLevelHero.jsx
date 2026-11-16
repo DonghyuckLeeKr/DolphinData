@@ -261,9 +261,9 @@ export default function WaterLevelHero({ profile, dailyGB = {}, usedGB, download
           <b>{profile?.name || '데이터 요금제'}</b>
           <span>{describePlan({ ...plan, monthlyLimitGB: limitGB })} · 매월 {resetDay}일 리셋</span>
           {onOpenCalibration && (
-            <button type="button" className="water-hero__edit" onClick={onOpenCalibration} aria-label="요금제 정보와 사용량 보정">
+            <button type="button" className="water-hero__edit" onClick={onOpenCalibration} aria-label="요금제와 사용량 수정">
               <Edit3 size={13} />
-              <span>보정</span>
+              <span>수정</span>
             </button>
           )}
         </div>

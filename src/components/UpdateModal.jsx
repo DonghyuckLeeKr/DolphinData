@@ -89,7 +89,7 @@ function UpdateModal({ update, status, error, onInstall, onClose }) {
                 <span>새 버전</span>
               </div>
               <h2 id="update-modal-title" style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.25rem', lineHeight: 1.35 }}>새로운 돌핀 데이터가 도착했어요</h2>
-              <p id="update-modal-description" style={{ margin: '5px 0 0', color: 'var(--text-muted)', fontSize: '0.78rem' }}>더 안정적이고 편리해진 최신 버전을 설치할 수 있습니다.</p>
+              <p id="update-modal-description" style={{ margin: '5px 0 0', color: 'var(--text-muted)', fontSize: '0.78rem' }}>아래 내용이 바뀐 새 버전을 설치할 수 있습니다.</p>
             </div>
           </div>
         </div>
@@ -111,7 +111,7 @@ function UpdateModal({ update, status, error, onInstall, onClose }) {
 
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '9px', marginTop: '14px', color: 'var(--text-muted)', fontSize: '0.7rem', lineHeight: 1.55 }}>
             <ShieldCheck size={17} color="var(--accent-emerald)" style={{ flex: '0 0 auto', marginTop: '1px' }} />
-            <span>검증된 업데이트 파일을 안전하게 설치합니다. 설치가 끝나면 앱이 자동으로 다시 시작됩니다.</span>
+            <span>서명이 확인된 업데이트만 설치합니다. 설치가 끝나면 앱이 다시 시작됩니다.</span>
           </div>
 
           {error && (

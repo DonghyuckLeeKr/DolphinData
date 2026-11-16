@@ -26,10 +26,10 @@ export default function Header({
   const mappingLabel = networkBinding?.meteringMode === 'metered' && mappedProfile
     ? `${mappedProfile.name}에 누적`
     : networkBinding?.meteringMode === 'unmetered'
-      ? '무제한 · 누적 안 함'
+      ? '무제한 · 사용량 안 셈'
       : networkBinding?.meteringMode === 'ignored'
         ? '측정 제외'
-        : '분류 필요 · 누적 보류';
+        : '요금제 연결 전';
   const badgeLabel = networkBinding?.meteringMode === 'metered' && mappedProfile
     ? mappedProfile.name
     : networkBinding?.meteringMode === 'unmetered'
@@ -37,15 +37,15 @@ export default function Header({
       : networkBinding?.meteringMode === 'ignored'
         ? '측정 제외'
         : networkBinding
-          ? '정보 등록 필요'
+          ? '요금제 연결 필요'
           : activeProfile?.name || '메인 요금제';
   const telemetryLabel = telemetry?.source === 'native'
-    ? '실시간 모니터링 중'
+    ? '측정 중'
     : telemetry?.source === 'simulation'
-      ? '브라우저 미리보기 · 사용량 저장 안 함'
+      ? '미리보기 · 저장 안 함'
       : telemetry?.source === 'error'
-        ? '계측 오류 · 사용량 누적 중지'
-        : '계측 준비 중';
+        ? '측정 오류 · 지금은 사용량을 세지 않음'
+        : '측정 준비 중';
   const handleOpenRouter = async () => {
     setRouterOpenError('');
     try {
@@ -97,7 +97,7 @@ export default function Header({
             </div>
             <p style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span className="pulse-dot"></span>
-              {currentNetworkLabel} → {mappingLabel} · {telemetryLabel}
+              {currentNetworkLabel} · {mappingLabel} · {telemetryLabel}
             </p>
           </div>
         </div>
@@ -146,7 +146,7 @@ export default function Header({
             onClick={onOpenDailyHistory}
             className="glass-btn"
             style={{ padding: '6px 10px', fontSize: '0.78rem', borderColor: 'rgba(56, 189, 248, 0.3)', color: 'var(--accent-blue)', cursor: 'pointer' }}
-            title="일별 소비 캘린더 및 14일 통계 차트 열기"
+            title="최근 14일 사용량 보기"
           >
             <Calendar size={14} />
             <span>캘린더</span>
@@ -161,7 +161,7 @@ export default function Header({
               style={{ padding: '6px 10px', fontSize: '0.78rem', borderColor: 'rgba(56, 189, 248, 0.4)', color: 'var(--accent-blue)', cursor: 'pointer' }}
               title={networkBinding?.gatewayIp
                 ? `${networkBinding.gatewayIp} 라우터 관리자 페이지 열기`
-                : '현재 네트워크의 기본 게이트웨이 확인 후 열기'}
+                : '라우터 설정 페이지 열기'}
             >
               <Globe size={14} />
               <span>라우터</span>
@@ -197,7 +197,7 @@ export default function Header({
             onClick={onToggleMiniGadget}
             className="glass-btn"
             style={{ padding: '6px 10px', fontSize: '0.78rem', cursor: 'pointer' }}
-            title="화면 구석 상시 고정 미니 가젯으로 전환"
+            title="작은 창으로 띄워 두기"
           >
             <Monitor size={14} />
             <span>미니</span>

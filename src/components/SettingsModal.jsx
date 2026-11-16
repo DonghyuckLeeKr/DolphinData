@@ -205,7 +205,7 @@ function SettingsModal({
     metered: '이 네트워크의 송수신량을 선택한 요금제에 누적합니다.',
     unmetered: '집·회사 Wi-Fi처럼 한도 차감 없이 실시간 속도만 표시합니다.',
     ignored: '이 네트워크는 사용량 누적에서 제외합니다.',
-    unclassified: '아직 분류하지 않았습니다. 분류 전에는 사용량을 누적하지 않습니다.'
+    unclassified: '아직 정하지 않았습니다. 정하기 전에는 사용량을 세지 않습니다.'
   };
   const displayedAppVersion = /^\d+\.\d+\.\d+/.test(appVersion) ? `v${appVersion}` : appVersion;
 
@@ -247,7 +247,7 @@ function SettingsModal({
         if (onImportConfig) {
           onImportConfig(importedConfig);
         }
-        alert('설정 및 프로필 데이터를 성공적으로 불러왔습니다.');
+        alert('백업을 불러왔습니다.');
         onClose();
       } catch (err) {
         console.error('Failed to import backup json', err);
@@ -336,7 +336,7 @@ function SettingsModal({
                       윈도우 부팅 시 자동 실행
                     </span>
                     <span style={{ fontSize: '0.73rem', color: 'var(--text-muted)' }}>
-                      PC 시작 시 시스템 트레이에 백그라운드로 자동 실행됩니다.
+                      PC를 켜면 작업 표시줄 트레이에서 바로 실행됩니다.
                     </span>
                   </div>
                 </div>
@@ -356,7 +356,7 @@ function SettingsModal({
                   <div>
                     <span style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-main)' }}>관리자 권한 실행</span>
                     <span style={{ display: 'block', fontSize: '0.73rem', color: 'var(--text-muted)' }}>
-                      부팅 시에는 일반 권한으로 실행됩니다. 필요할 때만 Windows의 권한 확인 후 다시 엽니다.
+                      프로그램별 데이터 사용량을 보려면 필요합니다. 부팅할 때는 일반 권한으로 실행됩니다.
                     </span>
                   </div>
                 </div>
@@ -472,7 +472,7 @@ function SettingsModal({
     {/* Current network identity and quota mapping */}
               <div>
                 <label style={{ fontSize: '0.82rem', fontWeight: '600', color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
-                  현재 네트워크의 사용량 처리
+                  이 네트워크의 사용량
                 </label>
                 {networkBinding ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -483,7 +483,7 @@ function SettingsModal({
                         <span style={{ color: 'var(--accent-blue)', fontSize: '0.72rem' }}>{networkDisplay.label}</span>
                       </div>
                       <span style={{ color: 'var(--text-muted)', fontSize: '0.71rem', display: 'block', marginTop: '4px' }}>
-                        자동 선택된 물리 어댑터: {networkBinding.interfaceName || '확인 중'}
+                        사용 중인 어댑터: {networkBinding.interfaceName || '확인 중'}
                       </span>
                     </div>
 
@@ -493,8 +493,8 @@ function SettingsModal({
                       className="glass-input"
                       style={{ color: 'var(--text-main)', width: '100%', cursor: 'pointer' }}
                     >
-                      <option value="unclassified" style={{ background: 'var(--bg-primary)' }}>정보 등록 필요 (누적 보류)</option>
-                      <option value="metered" style={{ background: 'var(--bg-primary)' }}>데이터 한도 차감 네트워크</option>
+                      <option value="unclassified" style={{ background: 'var(--bg-primary)' }}>아직 정하지 않음 (사용량 안 셈)</option>
+                      <option value="metered" style={{ background: 'var(--bg-primary)' }}>데이터 요금제 (사용량 셈)</option>
                       <option value="unmetered" style={{ background: 'var(--bg-primary)' }}>무제한 네트워크 (집·회사 Wi-Fi)</option>
                       <option value="ignored" style={{ background: 'var(--bg-primary)' }}>측정 제외</option>
                     </select>
@@ -528,7 +528,7 @@ function SettingsModal({
     {/* Daily Surge Limiter */}
               <div>
                 <label style={{ fontSize: '0.82rem', fontWeight: '600', color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
-                  일일 데이터 폭주 방지 경고 한도 (GB)
+                  하루 사용량 알림 기준 (GB)
                 </label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <input
@@ -545,7 +545,7 @@ function SettingsModal({
                   <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-muted)' }}>GB / 일</span>
                 </div>
                 <span style={{ fontSize: '0.73rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
-                  하루에 이 용량을 초과하여 소비할 경우 윈도우 푸시 알림으로 경고합니다.
+                  하루에 이만큼 넘게 쓰면 Windows 알림을 보냅니다.
                 </span>
               </div>
               </>
@@ -555,7 +555,7 @@ function SettingsModal({
     {/* Backup and Report Controls */}
               <div>
                 <label style={{ fontSize: '0.82rem', fontWeight: '600', color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
-                  데이터 백업 및 리포트
+                  백업
                 </label>
             
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
@@ -601,7 +601,7 @@ function SettingsModal({
                     title="이전에 백업해 둔 설정(JSON) 파일을 불러와 복원합니다."
                   >
                     <Upload size={14} />
-                    <span>설정 파일(.json) 불러오기 및 복원</span>
+                    <span>백업 파일 불러오기</span>
                   </button>
                 </div>
               </div>
@@ -612,7 +612,7 @@ function SettingsModal({
     {/* Application version and support contact */}
               <div>
                 <label style={{ fontSize: '0.82rem', fontWeight: '600', color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
-                  앱 정보 및 문의
+                  앱 정보 · 문의
                 </label>
                 <div style={{ display: 'grid', gridTemplateColumns: '0.8fr 1.4fr', gap: '8px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '9px', minHeight: '54px', padding: '10px 12px', borderRadius: '10px', background: 'var(--glass-card)', border: '1px solid var(--glass-border-light)' }}>

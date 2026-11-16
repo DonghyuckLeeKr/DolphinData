@@ -14,7 +14,7 @@ export default function ProfileTabBar({
 
   const handleAdd = () => {
     if (profiles.length >= MAX_PROFILES) {
-      alert(`요금제 프로필은 최대 ${MAX_PROFILES}개까지 등록할 수 있습니다.`);
+      alert(`요금제는 ${MAX_PROFILES}개까지 추가할 수 있습니다.`);
       return;
     }
     // Opens the plan window; the plan is created only when the user saves it.
@@ -117,7 +117,7 @@ export default function ProfileTabBar({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (window.confirm(`'${profile.name}' 프로필을 삭제하시겠습니까?`)) {
+                        if (window.confirm(`'${profile.name}' 요금제를 삭제할까요? 이 요금제의 사용 기록도 함께 지워집니다.`)) {
                           onDeleteProfile(profile.id);
                         }
                       }}
@@ -146,7 +146,7 @@ export default function ProfileTabBar({
               color: 'var(--text-muted)',
               borderColor: 'var(--glass-border)'
             }}
-            title={`새 요금제 프로필 추가 (최대 ${MAX_PROFILES}개)`}
+            title={`요금제 추가 (최대 ${MAX_PROFILES}개)`}
           >
             <Plus size={14} color="var(--brand-color)" />
             <span>요금제 추가 ({profiles.length}/{MAX_PROFILES})</span>

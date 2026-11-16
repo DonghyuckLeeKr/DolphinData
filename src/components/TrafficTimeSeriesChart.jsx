@@ -88,7 +88,7 @@ export default function TrafficTimeSeriesChart({ historyData, unitMode, profile 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
         <div>
           <h3 style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--text-main)' }}>
-            실시간 트래픽 추이 (최근 60초)
+            최근 1분 속도
           </h3>
           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
             {networkDisplay.trafficDescription}
