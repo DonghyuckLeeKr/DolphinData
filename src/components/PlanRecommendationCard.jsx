@@ -118,7 +118,7 @@ export default function PlanRecommendationCard({ config }) {
           </h4>
 
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>
-            {recommendation.subtitle} · <b>추천: {recommendation.recommendedPlanName} ({recommendation.estimatedSavings})</b>
+            {recommendation.subtitle}, <b>추천: {recommendation.recommendedPlanName} ({recommendation.estimatedSavings})</b>
           </p>
         </div>
 

@@ -60,13 +60,13 @@ export default function AppBreakdownCard() {
               display: 'flex', alignItems: 'center', gap: '4px'
             }}>
               {isEtw ? <CheckCircle2 size={11} /> : <TriangleAlert size={11} />}
-              {isEtw ? '실제 데이터 사용량' : 'CPU·메모리로 표시 중'}
+              {isEtw ? '실제 데이터 사용량' : 'CPU와 메모리로 표시 중'}
             </span>
           </div>
           <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
             {isEtw
               ? '프로그램마다 받고 보낸 데이터를 보여 줍니다. CPU와 메모리는 참고용입니다.'
-              : '프로그램별 데이터는 관리자 권한에서만 볼 수 있어, 지금은 CPU·메모리 순으로 보여 줍니다.'}
+              : '프로그램별 데이터는 관리자 권한에서만 볼 수 있어, 지금은 CPU와 메모리 순으로 보여 줍니다.'}
           </p>
         </div>
 

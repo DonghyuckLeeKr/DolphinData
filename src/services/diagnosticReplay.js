@@ -37,5 +37,5 @@ export function replayDiagnosticReport(input) {
     : report.symptom === 'disconnect-prompt' ? trace.some(t => t.action === 'disconnected' && t.activeFingerprint) : false;
   return { status: !evidence || report.truncated ? 'needs-more-data' : failed ? 'reproduced' : 'not-reproduced',
     created, disconnects, confirmed, trace, finalConfig: config,
-    limitation: '익명화된 네트워크 상태 전이를 재생합니다. 실제 USB 장치·시작 프로그램·ETW 동작은 별도 확인이 필요합니다.' };
+    limitation: '익명화된 네트워크 상태 전이를 재생합니다. 실제 USB 장치, 시작 프로그램, ETW 동작은 별도 확인이 필요합니다.' };
 }

@@ -12,7 +12,7 @@ const MODES = [
   {
     value: 'unmetered',
     label: '무제한 네트워크',
-    description: '집·회사 Wi-Fi처럼 속도만 표시하고 사용량은 누적하지 않습니다.',
+    description: '집과 회사 Wi-Fi처럼 속도만 표시하고 사용량은 누적하지 않습니다.',
     Icon: InfinityIcon
   },
   {

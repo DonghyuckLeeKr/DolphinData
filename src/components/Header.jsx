@@ -20,13 +20,13 @@ export default function Header({
   const currentTheme = config.theme || 'soft-dark';
   const networkDisplay = getNetworkDisplayInfo(networkBinding || {});
   const currentNetworkLabel = networkBinding
-    ? `${networkDisplay.label} · ${networkBinding.networkName || networkBinding.interfaceName || '현재 네트워크'}`
+    ? `${networkDisplay.label}, ${networkBinding.networkName || networkBinding.interfaceName || '현재 네트워크'}`
     : '네트워크 확인 중';
   const mappedProfile = (config.profiles || []).find(profile => profile.id === networkBinding?.profileId);
   const mappingLabel = networkBinding?.meteringMode === 'metered' && mappedProfile
     ? `${mappedProfile.name}에 누적`
     : networkBinding?.meteringMode === 'unmetered'
-      ? '무제한 · 사용량 안 셈'
+      ? '무제한, 사용량 안 셈'
       : networkBinding?.meteringMode === 'ignored'
         ? '측정 제외'
         : '요금제 연결 전';
@@ -42,9 +42,9 @@ export default function Header({
   const telemetryLabel = telemetry?.source === 'native'
     ? '측정 중'
     : telemetry?.source === 'simulation'
-      ? '미리보기 · 저장 안 함'
+      ? '미리보기, 저장 안 함'
       : telemetry?.source === 'error'
-        ? '측정 오류 · 지금은 사용량을 세지 않음'
+        ? '측정 오류로 지금은 사용량을 세지 않음'
         : '측정 준비 중';
   const handleOpenRouter = async () => {
     setRouterOpenError('');
@@ -97,7 +97,7 @@ export default function Header({
             </div>
             <p style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span className="pulse-dot"></span>
-              {currentNetworkLabel} · {mappingLabel} · {telemetryLabel}
+              {currentNetworkLabel}, {mappingLabel}, {telemetryLabel}
             </p>
           </div>
         </div>
@@ -213,7 +213,7 @@ export default function Header({
               cursor: 'pointer',
               ...(diagnosticRecording ? { color: 'var(--accent-rose)', borderColor: 'var(--accent-rose)' } : {})
             }}
-            title={diagnosticRecording ? '진단 기록 중 · 문제 신고 창 열기' : '문제 신고'}
+            title={diagnosticRecording ? '진단 기록 중, 문제 신고 창 열기' : '문제 신고'}
             aria-label={diagnosticRecording ? '진단 기록 중, 문제 신고 창 열기' : '문제 신고'}
           >
             <LifeBuoy size={14} />

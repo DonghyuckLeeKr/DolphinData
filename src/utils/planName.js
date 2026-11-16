@@ -62,14 +62,14 @@ export function parsePlanName(input) {
   return result;
 }
 
-// One line describing the plan structure, e.g. "월 11GB + 매일 2GB · 이후 3Mbps 무제한".
+// One line describing the plan structure, e.g. "월 11GB + 매일 2GB, 이후 3Mbps 무제한".
 export function describePlan(profile) {
   const parts = [`월 ${round(Number(profile?.monthlyLimitGB) || 0)}GB`];
   if (Number(profile?.dailyBonusGB) > 0) parts.push(`매일 ${round(Number(profile.dailyBonusGB))}GB`);
   const head = parts.join(' + ');
   if (profile?.afterLimit === 'throttled') {
     const mbps = Number(profile.throttleMbps);
-    return `${head} · 이후 ${mbps > 0 ? `${round(mbps)}Mbps ` : '속도 제한 '}무제한`;
+    return `${head}, 이후 ${mbps > 0 ? `${round(mbps)}Mbps ` : '속도 제한 '}무제한`;
   }
-  return `${head} · 다 쓰면 차단·추가 요금`;
+  return `${head}, 다 쓰면 차단되거나 추가 요금`;
 }

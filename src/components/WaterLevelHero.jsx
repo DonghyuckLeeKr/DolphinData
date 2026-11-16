@@ -144,25 +144,25 @@ export default function WaterLevelHero({ profile, dailyGB = {}, usedGB, download
   let sub;
   if (forecast.status === 'throttled') {
     headline = <>기본 데이터를 다 써서 <em>{afterBase}</em>로 쓰는 중이에요</>;
-    sub = `${formatLongDate(forecast.end)} 리셋까지 ${Math.ceil(forecast.remainingDays)}일 · 느려도 계속 쓸 수 있어요`;
+    sub = `${formatLongDate(forecast.end)} 리셋까지 ${Math.ceil(forecast.remainingDays)}일, 느려도 계속 쓸 수 있어요`;
   } else if (forecast.status === 'exhausted') {
     headline = <>이번 달 데이터를 <em>모두 썼어요</em></>;
     sub = `${formatLongDate(forecast.end)} 리셋까지 ${Math.ceil(forecast.remainingDays)}일 남았어요.`;
   } else if (forecast.status === 'over' && throttled) {
     headline = <>이 속도면 <em>{formatLongDate(forecast.depletionDate)}</em>부터 {afterBase}로 써요</>;
-    sub = `리셋보다 ${daysShort}일 빨라요 · 하루 평균 ${formatGB(forecast.dailyPaceGB)} GB 사용 중`;
+    sub = `리셋보다 ${daysShort}일 빨라요, 하루 평균 ${formatGB(forecast.dailyPaceGB)} GB 사용 중`;
   } else if (forecast.status === 'over') {
     headline = <>이 속도면 <em>{formatLongDate(forecast.depletionDate)}</em>에 바닥나요</>;
-    sub = `리셋보다 ${daysShort}일 빨라요 · 하루 평균 ${formatGB(forecast.dailyPaceGB)} GB 사용 중`;
+    sub = `리셋보다 ${daysShort}일 빨라요, 하루 평균 ${formatGB(forecast.dailyPaceGB)} GB 사용 중`;
   } else if (forecast.status === 'tight') {
     headline = <>리셋일까지 <em>아슬아슬하게</em> 버틸 수 있어요</>;
-    sub = `예상 사용량 ${formatGB(forecast.projectedTotalGB)} GB · 하루 평균 ${formatGB(forecast.dailyPaceGB)} GB`;
+    sub = `예상 사용량 ${formatGB(forecast.projectedTotalGB)} GB, 하루 평균 ${formatGB(forecast.dailyPaceGB)} GB`;
   } else if (forecast.usedGB === 0) {
     headline = <>이번 달 데이터가 <em>가득</em> 차 있어요</>;
     sub = `${formatLongDate(forecast.end)}에 리셋돼요. 사용하기 시작하면 소진 예상일을 알려 드려요.`;
   } else {
     headline = <>이 속도면 리셋일까지 <em>넉넉해요</em></>;
-    sub = `예상 사용량 ${formatGB(forecast.projectedTotalGB)} GB · 하루 평균 ${formatGB(forecast.dailyPaceGB)} GB`;
+    sub = `예상 사용량 ${formatGB(forecast.projectedTotalGB)} GB, 하루 평균 ${formatGB(forecast.dailyPaceGB)} GB`;
   }
 
   const todayRatio = forecast.todayBudgetGB > 0 ? Math.min(1, forecast.todayUsedGB / forecast.todayBudgetGB) : 1;
@@ -259,7 +259,7 @@ export default function WaterLevelHero({ profile, dailyGB = {}, usedGB, download
       <div className="water-hero__body">
         <div className="water-hero__eyebrow">
           <b>{profile?.name || '데이터 요금제'}</b>
-          <span>{describePlan({ ...plan, monthlyLimitGB: limitGB })} · 매월 {resetDay}일 리셋</span>
+          <span>{describePlan({ ...plan, monthlyLimitGB: limitGB })}, 매월 {resetDay}일 리셋</span>
           {onOpenCalibration && (
             <button type="button" className="water-hero__edit" onClick={onOpenCalibration} aria-label="요금제와 사용량 수정">
               <Edit3 size={13} />
@@ -270,7 +270,7 @@ export default function WaterLevelHero({ profile, dailyGB = {}, usedGB, download
 
         <div className="water-hero__remaining">
           <strong>{formatGB(forecast.remainingGB)} GB</strong>
-          <span>남음 · {formatGB(forecast.usedGB)} / {limitGB} GB 사용</span>
+          <span>남음, {formatGB(forecast.usedGB)} / {limitGB} GB 사용</span>
         </div>
 
         <div>
@@ -294,7 +294,7 @@ export default function WaterLevelHero({ profile, dailyGB = {}, usedGB, download
           <BurnChart forecast={forecast} accent="var(--hero-accent)" />
           <div className="water-hero__chart-labels">
             <span>{formatShortDate(forecast.start)} 시작</span>
-            <span>점선: 지금 속도의 예상 · 회색선: 한도</span>
+            <span>점선은 지금 속도의 예상, 회색선은 한도</span>
             <span>{formatShortDate(forecast.end)} 리셋</span>
           </div>
         </div>

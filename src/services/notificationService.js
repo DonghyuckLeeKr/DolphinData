@@ -46,7 +46,7 @@ export const checkAndNotifyDailySurge = (todayGB, dailyLimitGB, profileName, pro
   if (todayGB >= dailyLimitGB && lastDailyNotifiedDateByProfile[profileId] !== todayStr) {
     lastDailyNotifiedDateByProfile[profileId] = todayStr;
     sendOSNotification(
-      `${profileName || '요금제'} · 오늘 데이터를 많이 썼어요`,
+      `오늘 ${profileName || '요금제'} 데이터를 많이 썼어요`,
       `오늘 ${todayGB.toFixed(2)} GB를 써서 알림 기준 ${dailyLimitGB} GB를 넘었습니다. 자동 업데이트나 클라우드 동기화 같은 백그라운드 다운로드가 있는지 확인해 보세요.`
     );
   }
@@ -55,17 +55,17 @@ export const checkAndNotifyDailySurge = (todayGB, dailyLimitGB, profileName, pro
 const THRESHOLD_ALERTS = [
   {
     key: 't95', percent: 95,
-    title: name => `${name} · 데이터 95% 사용`,
+    title: name => `${name} 데이터 95% 사용`,
     body: usage => `${usage} 사용했습니다. 다 쓰면 차단되거나 추가 요금이 붙을 수 있습니다.`
   },
   {
     key: 't90', percent: 90,
-    title: name => `${name} · 데이터 90% 사용`,
+    title: name => `${name} 데이터 90% 사용`,
     body: usage => `${usage} 사용했습니다. 리셋일까지 아껴 쓰는 게 좋겠습니다.`
   },
   {
     key: 't80', percent: 80,
-    title: name => `${name} · 데이터 80% 사용`,
+    title: name => `${name} 데이터 80% 사용`,
     body: usage => `${usage} 사용했습니다.`
   }
 ];
@@ -76,7 +76,7 @@ const throttledAlert = (alert, plan) => {
   const speed = Number(plan.throttleMbps) > 0 ? `${Number(plan.throttleMbps)}Mbps` : '느린 속도';
   const next = Number(plan.dailyBonusGB) > 0 ? `매일 ${Number(plan.dailyBonusGB)}GB + ${speed}` : speed;
   return {
-    title: name => `${name} · 기본 데이터 ${alert.percent}% 사용`,
+    title: name => `${name} 기본 데이터 ${alert.percent}% 사용`,
     body: usage => `${usage} 사용했습니다. 다 쓰면 ${next}로 계속 쓸 수 있습니다.`
   };
 };

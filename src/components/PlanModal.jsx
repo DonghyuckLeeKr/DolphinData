@@ -115,7 +115,7 @@ function PlanModal({ profile = null, currentUsedGB = 0, networkBindings = [], on
   };
 
   const guessNote = guessed.length > 0
-    ? `${guessed.map(field => (field === 'dailyBonusGB' ? '매일 추가 데이터' : '소진 후 속도')).join('·')}는 이 이름의 일반적인 구성으로 채웠어요. 요금제 안내와 다르면 고쳐 주세요.`
+    ? `${guessed.map(field => (field === 'dailyBonusGB' ? '매일 추가 데이터' : '소진 후 속도')).join('와 ')}는 이 이름의 일반적인 구성으로 채웠어요. 요금제 안내와 다르면 고쳐 주세요.`
     : '';
 
   return (
@@ -125,7 +125,7 @@ function PlanModal({ profile = null, currentUsedGB = 0, networkBindings = [], on
         <div className="modal-heading">
           <div className="modal-heading__icon"><Smartphone size={20} /></div>
           <div>
-            <h2 id={titleId}>{isNew ? '요금제 추가' : '요금제 정보 · 사용량'}</h2>
+            <h2 id={titleId}>{isNew ? '요금제 추가' : '요금제 정보와 사용량'}</h2>
             <p>요금제 이름을 붙여 넣으면 데이터 구성을 알아서 채워 드려요.</p>
           </div>
         </div>
@@ -144,7 +144,7 @@ function PlanModal({ profile = null, currentUsedGB = 0, networkBindings = [], on
           </label>
 
           <div className="plan-field">
-            <span className="plan-field__label">통신사 · 회선 (선택)</span>
+            <span className="plan-field__label">통신사, 회선 이름 (선택)</span>
             <div className="plan-field__row">
               <input className="glass-input" value={carrier} onChange={event => { touch('carrier'); setCarrier(event.target.value); }} placeholder="예: A모바일, 회사 에그" aria-label="통신사 또는 회선 이름" />
               <button type="button" className="glass-btn plan-field__side" onClick={handleDetect} disabled={scanning}>
@@ -180,7 +180,7 @@ function PlanModal({ profile = null, currentUsedGB = 0, networkBindings = [], on
             <div className="plan-choice__options">
               {[
                 { id: 'throttled', label: '느린 속도로 계속', hint: '"11GB+", "3Mbps" 같은 요금제' },
-                { id: 'blocked', label: '차단 · 추가 요금', hint: '한도가 끝인 요금제' }
+                { id: 'blocked', label: '차단, 추가 요금', hint: '한도가 끝인 요금제' }
               ].map(option => (
                 <button key={option.id} type="button" className="glass-btn plan-choice__option" aria-pressed={afterLimit === option.id}
                   onClick={() => { touch('afterLimit'); setAfterLimit(option.id); }}>
@@ -240,7 +240,7 @@ function PlanModal({ profile = null, currentUsedGB = 0, networkBindings = [], on
 
           {networkBindings.length > 0 && (
             <p className="plan-field__hint">
-              연결된 네트워크: <b>{networkBindings.map(binding => binding.networkName || binding.interfaceName).filter(Boolean).join(', ')}</b> · 변경은 환경 설정에서
+              연결된 네트워크: <b>{networkBindings.map(binding => binding.networkName || binding.interfaceName).filter(Boolean).join(', ')}</b>. 변경은 환경 설정에서 할 수 있습니다.
             </p>
           )}
 

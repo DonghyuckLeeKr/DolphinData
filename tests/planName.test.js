@@ -46,6 +46,6 @@ test('MB amounts and names without numbers', () => {
 });
 
 test('plan structure is described in one line', () => {
-  assert.equal(describePlan({ monthlyLimitGB: 11, dailyBonusGB: 2, afterLimit: 'throttled', throttleMbps: 3 }), '월 11GB + 매일 2GB · 이후 3Mbps 무제한');
-  assert.equal(describePlan({ monthlyLimitGB: 100, afterLimit: 'blocked' }), '월 100GB · 다 쓰면 차단·추가 요금');
+  assert.equal(describePlan({ monthlyLimitGB: 11, dailyBonusGB: 2, afterLimit: 'throttled', throttleMbps: 3 }), '월 11GB + 매일 2GB, 이후 3Mbps 무제한');
+  assert.equal(describePlan({ monthlyLimitGB: 100, afterLimit: 'blocked' }), '월 100GB, 다 쓰면 차단되거나 추가 요금');
 });

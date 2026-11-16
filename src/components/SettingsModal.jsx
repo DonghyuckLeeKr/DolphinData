@@ -12,7 +12,7 @@ import useModalA11y from '../hooks/useModalA11y';
 
 const SETTINGS_TABS = [
   { id: 'general', label: '일반' },
-  { id: 'network', label: '네트워크·요금제' },
+  { id: 'network', label: '네트워크와 요금제' },
   { id: 'data', label: '데이터' },
   { id: 'about', label: '정보' }
 ];
@@ -203,7 +203,7 @@ function SettingsModal({
   const networkDisplay = getNetworkDisplayInfo(networkBinding || {});
   const modeDescriptions = {
     metered: '이 네트워크의 송수신량을 선택한 요금제에 누적합니다.',
-    unmetered: '집·회사 Wi-Fi처럼 한도 차감 없이 실시간 속도만 표시합니다.',
+    unmetered: '집과 회사 Wi-Fi처럼 한도 차감 없이 실시간 속도만 표시합니다.',
     ignored: '이 네트워크는 사용량 누적에서 제외합니다.',
     unclassified: '아직 정하지 않았습니다. 정하기 전에는 사용량을 세지 않습니다.'
   };
@@ -445,7 +445,7 @@ function SettingsModal({
                 {dashboardMode === 'detailed' && (
                   <fieldset style={{ border: 'none', padding: 0, margin: '10px 0 0', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '6px 12px' }}>
                     <legend style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginBottom: '6px', padding: 0 }}>
-                      표시할 카드 · 남은 데이터 화면은 항상 맨 위에 표시됩니다.
+                      표시할 카드를 고르세요. 남은 데이터 화면은 항상 맨 위에 표시됩니다.
                     </legend>
                     {DASHBOARD_CARDS.map(card => (
                       <label key={card.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', color: 'var(--text-main)', cursor: 'pointer' }}>
@@ -495,7 +495,7 @@ function SettingsModal({
                     >
                       <option value="unclassified" style={{ background: 'var(--bg-primary)' }}>아직 정하지 않음 (사용량 안 셈)</option>
                       <option value="metered" style={{ background: 'var(--bg-primary)' }}>데이터 요금제 (사용량 셈)</option>
-                      <option value="unmetered" style={{ background: 'var(--bg-primary)' }}>무제한 네트워크 (집·회사 Wi-Fi)</option>
+                      <option value="unmetered" style={{ background: 'var(--bg-primary)' }}>무제한 네트워크 (집과 회사 Wi-Fi)</option>
                       <option value="ignored" style={{ background: 'var(--bg-primary)' }}>측정 제외</option>
                     </select>
 
@@ -612,7 +612,7 @@ function SettingsModal({
     {/* Application version and support contact */}
               <div>
                 <label style={{ fontSize: '0.82rem', fontWeight: '600', color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
-                  앱 정보 · 문의
+                  앱 정보와 문의
                 </label>
                 <div style={{ display: 'grid', gridTemplateColumns: '0.8fr 1.4fr', gap: '8px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '9px', minHeight: '54px', padding: '10px 12px', borderRadius: '10px', background: 'var(--glass-card)', border: '1px solid var(--glass-border-light)' }}>
