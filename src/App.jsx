@@ -41,7 +41,7 @@ import PingTestCard from './components/PingTestCard';
 import AppBreakdownCard from './components/AppBreakdownCard';
 import MiniGadget from './components/MiniGadget';
 import TitleBar from './components/TitleBar';
-import CalibrationModal from './components/CalibrationModal';
+import PlanModal from './components/PlanModal';
 import SettingsModal from './components/SettingsModal';
 import ReportModal from './components/ReportModal';
 import DailyHistoryModal from './components/DailyHistoryModal';
@@ -65,6 +65,7 @@ export default function App() {
   });
   const [historyData, setHistoryData] = useState([]);
   const [showCalibration, setShowCalibration] = useState(false);
+  const [addingPlan, setAddingPlan] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [showDailyHistory, setShowDailyHistory] = useState(false);
@@ -119,11 +120,14 @@ export default function App() {
     usedGB: calculateTotalUsedGB(activeProfile),
     limitGB: Number(activeProfile?.monthlyLimitGB) || 100,
     resetDay: activeProfile?.resetDay || 1,
-    dailyGB: getDailyHistoryGB(config, activeProfile?.id)
+    dailyGB: getDailyHistoryGB(config, activeProfile?.id),
+    plan: activeProfile
   });
   const trayGauge = {
-    remainingRatio: trayForecast.limitGB > 0 ? trayForecast.remainingGB / trayForecast.limitGB : 0,
-    status: trayForecast.status
+    // A throttled plan still works after its monthly data, so the tray keeps a shallow layer.
+    remainingRatio: trayForecast.status === 'throttled' ? 0.04
+      : trayForecast.limitGB > 0 ? trayForecast.remainingGB / trayForecast.limitGB : 0,
+    status: trayForecast.tone
   };
   const trayKey = trayGaugeKey(trayGauge);
 
@@ -349,7 +353,7 @@ export default function App() {
                   };
                   // Check threshold push notification for this profile
                   const profileTotalGB = calculateTotalUsedGB(updatedP);
-                  checkAndNotifyThresholds(profileTotalGB, updatedP.monthlyLimitGB || 100, updatedP.name, updatedP.id, rolledConfig.alerts);
+                  checkAndNotifyThresholds(profileTotalGB, updatedP.monthlyLimitGB || 100, updatedP.name, updatedP.id, rolledConfig.alerts, undefined, updatedP);
                   return updatedP;
                 }
                 return p;
@@ -450,6 +454,17 @@ export default function App() {
       return updated;
     });
   }, []);
+
+  // The plan window returns the plan fields; a new plan gets its id and empty counters here.
+  const handleCreatePlan = useCallback((planData) => {
+    handleAddProfile({
+      id: `profile-${Date.now()}`,
+      initialBaselineGB: 0,
+      sessionBytes: 0,
+      profileOrigin: 'manual',
+      ...planData
+    });
+  }, [handleAddProfile]);
 
   const handleDeleteProfile = useCallback((profileId) => {
     setConfig(prev => {
@@ -584,7 +599,7 @@ export default function App() {
         <ProfileTabBar
           config={config}
           onSwitchProfile={handleSwitchProfile}
-          onAddProfile={handleAddProfile}
+          onAddProfile={() => setAddingPlan(true)}
           onDeleteProfile={handleDeleteProfile}
           onOpenCalibration={() => setShowCalibration(true)}
         />
@@ -643,12 +658,13 @@ export default function App() {
       </div>
 
       {/* Modals */}
-      {showCalibration && (
-        <CalibrationModal
-          profile={activeProfile}
-          networkBindings={(config.networkBindings || []).filter(binding => binding.profileId === activeProfile.id)}
-          onSave={handleUpdateActiveProfile}
-          onClose={() => setShowCalibration(false)}
+      {(showCalibration || addingPlan) && (
+        <PlanModal
+          profile={addingPlan ? null : activeProfile}
+          currentUsedGB={calculateTotalUsedGB(activeProfile)}
+          networkBindings={addingPlan ? [] : (config.networkBindings || []).filter(binding => binding.profileId === activeProfile.id)}
+          onSave={addingPlan ? handleCreatePlan : handleUpdateActiveProfile}
+          onClose={() => { setShowCalibration(false); setAddingPlan(false); }}
         />
       )}
 

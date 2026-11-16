@@ -32,6 +32,9 @@ export const DEFAULT_PROFILE = {
   name: '메인 데이터 요금제',
   carrierName: '모바일 데이터 요금제',
   monthlyLimitGB: 100,
+  dailyBonusGB: 0,
+  afterLimit: 'blocked',
+  throttleMbps: 0,
   initialBaselineGB: 0,
   sessionBytes: 0,
   resetDay: 1,
@@ -171,6 +174,11 @@ const normalizeProfile = (profile, index) => {
     name: normalizeText(profile?.name, `요금제 ${index + 1}`, MAX_TEXT_LENGTHS.name),
     carrierName: normalizeText(profile?.carrierName, '', MAX_TEXT_LENGTHS.carrierName),
     monthlyLimitGB: normalizeNumber(profile?.monthlyLimitGB, 100, 1, 5000),
+    // After the monthly data runs out: a daily top-up at full speed, then either a speed-capped
+    // unlimited tail (common for "11GB+" style MVNO plans) or a hard stop.
+    dailyBonusGB: normalizeNumber(profile?.dailyBonusGB, 0, 0, 100),
+    afterLimit: profile?.afterLimit === 'throttled' ? 'throttled' : 'blocked',
+    throttleMbps: normalizeNumber(profile?.throttleMbps, 0, 0, 1000),
     initialBaselineGB: normalizeNumber(profile?.initialBaselineGB, 0, 0, 1_000_000),
     sessionBytes: Math.round(normalizeNumber(profile?.sessionBytes, 0, 0, Number.MAX_SAFE_INTEGER)),
     resetDay,

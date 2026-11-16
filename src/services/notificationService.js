@@ -70,7 +70,18 @@ const THRESHOLD_ALERTS = [
   }
 ];
 
-export const checkAndNotifyThresholds = (usedGB, limitGB, carrierName, profileId = 'default', alerts = {}, notify = sendOSNotification) => {
+// Plans that only slow down after their monthly data are never "cut off", so their alerts
+// say what happens next instead of warning about blocking or extra charges.
+const throttledAlert = (alert, plan) => {
+  const speed = Number(plan.throttleMbps) > 0 ? `${Number(plan.throttleMbps)}Mbps` : '느린 속도';
+  const next = Number(plan.dailyBonusGB) > 0 ? `매일 ${Number(plan.dailyBonusGB)}GB + ${speed}` : speed;
+  return {
+    title: name => `[알림 ${alert.percent}%] ${name} 기본 데이터 ${alert.percent >= 95 ? '거의 소진' : '사용량'}`,
+    body: usage => `현재 ${usage} 사용했습니다. 다 쓰면 ${next}로 계속 쓸 수 있어요.`
+  };
+};
+
+export const checkAndNotifyThresholds = (usedGB, limitGB, carrierName, profileId = 'default', alerts = {}, notify = sendOSNotification, plan = {}) => {
   if (!limitGB || limitGB <= 0) return;
   const percentage = (usedGB / limitGB) * 100;
 
@@ -88,7 +99,8 @@ export const checkAndNotifyThresholds = (usedGB, limitGB, carrierName, profileId
     crossed.forEach(alert => { tracker[alert.key] = true; });
     if (pending) {
       const usage = `${usedGB.toFixed(1)} GB / ${limitGB} GB (${percentage.toFixed(1)}%)`;
-      notify(pending.title(carrierName || '데이터 요금제'), pending.body(usage));
+      const message = plan?.afterLimit === 'throttled' ? throttledAlert(pending, plan) : pending;
+      notify(message.title(carrierName || '데이터 요금제'), message.body(usage));
     }
   }
 

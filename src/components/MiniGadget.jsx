@@ -211,7 +211,7 @@ export default function MiniGadget({ config, telemetry, onExpand, onOpenCalibrat
           </span>
           <span style={{ fontWeight: '700', color: statusColor }}>
             {isMetered
-              ? `${totalUsedGB.toFixed(1)} / ${limitGB} GB (${percentage.toFixed(0)}%)`
+              ? `${totalUsedGB.toFixed(1)} / ${limitGB} GB${activeProfile.afterLimit === 'throttled' ? '+' : ''} (${percentage.toFixed(0)}%)`
               : levelText}
           </span>
         </div>

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Plus, Trash2, Edit3, AlertCircle } from 'lucide-react';
-import { calculateTotalUsedGB, getBillingPeriod, MAX_PROFILES } from '../services/storageService';
+import { calculateTotalUsedGB, MAX_PROFILES } from '../services/storageService';
 
 export default function ProfileTabBar({
   config,
@@ -17,20 +17,8 @@ export default function ProfileTabBar({
       alert(`요금제 프로필은 최대 ${MAX_PROFILES}개까지 등록할 수 있습니다.`);
       return;
     }
-    const newIndex = profiles.length + 1;
-    const newProfile = {
-      id: `profile-${Date.now()}`,
-      name: `요금제 ${newIndex}`,
-      carrierName: `회선 ${newIndex}`,
-      monthlyLimitGB: 50,
-      initialBaselineGB: 0,
-      sessionBytes: 0,
-      resetDay: 1,
-      lastResetPeriod: getBillingPeriod(1),
-      profileOrigin: 'manual',
-      needsRegistration: false
-    };
-    onAddProfile(newProfile);
+    // Opens the plan window; the plan is created only when the user saves it.
+    onAddProfile();
   };
 
   return (
@@ -107,7 +95,7 @@ export default function ProfileTabBar({
                   )}
                 </div>
                 <span style={{ fontSize: '0.68rem', color: isActive ? 'var(--accent-blue)' : 'var(--text-dim)' }}>
-                  {usedGB.toFixed(1)} / {limitGB} GB ({pct.toFixed(0)}%)
+                  {usedGB.toFixed(1)} / {limitGB} GB{profile.afterLimit === 'throttled' ? '+' : ''} ({pct.toFixed(0)}%)
                 </span>
               </div>
 

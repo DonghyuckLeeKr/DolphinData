@@ -1,5 +1,5 @@
 // Tray icon drawn as a tiny water tank: the level is the selected plan's remaining data,
-// the colour follows the forecast status, and the dolphin swims at the surface.
+// the colour follows the forecast tone (safe / tight / danger), and the dolphin swims at the surface.
 
 import { DOLPHIN_BODY_PATH, DOLPHIN_FIN_PATH } from '../utils/dolphinShape.js';
 
@@ -14,8 +14,7 @@ const TRAY_COLORS = {
   water: {
     safe: ['#18e3ef', '#0b4fc0'],
     tight: ['#fcd34d', '#b45309'],
-    over: ['#fb7185', '#9f1239'],
-    exhausted: ['#fb7185', '#9f1239']
+    danger: ['#fb7185', '#9f1239']
   }
 };
 
