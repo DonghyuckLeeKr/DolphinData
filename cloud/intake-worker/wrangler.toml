@@ -7,7 +7,7 @@ workers_dev = true
 [[d1_databases]]
 binding = "DB"
 database_name = "dolphindata-intake"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "d3a99cb8-fb74-4c04-9087-a8faca6e21ce"
 
 # Secrets, set with `wrangler secret put <NAME>` (never committed):
 #   ADMIN_TOKEN          bearer token the operator's PC uses to pull and delete reports (64 hex chars)

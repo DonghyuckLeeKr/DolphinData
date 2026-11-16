@@ -74,7 +74,8 @@ try {
     $store = Join-Path $env:LOCALAPPDATA 'DolphinData\automation'
     New-Item -ItemType Directory -Path $store -Force | Out-Null
     $protected = ConvertTo-SecureString -String $adminToken -AsPlainText -Force | ConvertFrom-SecureString
-    Set-Content -LiteralPath (Join-Path $store 'cloud-intake-token.dpapi') -Value $protected -Encoding UTF8
+    # No BOM or trailing newline: ConvertTo-SecureString rejects both when reading it back.
+    [IO.File]::WriteAllText((Join-Path $store 'cloud-intake-token.dpapi'), $protected, [Text.UTF8Encoding]::new($false))
     @{ endpoint = $endpoint } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $store 'cloud-intake.json') -Encoding UTF8
     $adminToken = $null
 

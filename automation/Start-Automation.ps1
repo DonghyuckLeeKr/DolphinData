@@ -11,7 +11,7 @@ if (!(Test-Path -LiteralPath (Join-Path $PSScriptRoot 'node_modules\discord.js')
 try {
     $cloudTokenPath = Join-Path $taskStore 'cloud-intake-token.dpapi'
     if (Test-Path -LiteralPath $cloudTokenPath) {
-        $secureCloudToken = Get-Content -LiteralPath $cloudTokenPath -Raw | ConvertTo-SecureString
+        $secureCloudToken = (Get-Content -LiteralPath $cloudTokenPath -Raw).Trim() | ConvertTo-SecureString
         $cloudTokenPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureCloudToken)
         try { $env:DOLPHIN_CLOUD_INTAKE_TOKEN = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($cloudTokenPointer) }
         finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($cloudTokenPointer) }
