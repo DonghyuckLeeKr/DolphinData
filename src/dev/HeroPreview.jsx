@@ -71,7 +71,7 @@ export default function HeroPreview() {
   const dailyGB = useMemo(() => buildHistory(usedGB, now), [usedGB, now]);
   const gauge = useMemo(() => {
     const forecast = forecastUsage({ usedGB, limitGB: LIMIT_GB, resetDay: RESET_DAY, dailyGB, now });
-    return { remainingRatio: forecast.remainingGB / LIMIT_GB, status: forecast.status };
+    return { remainingRatio: forecast.remainingGB / LIMIT_GB, status: forecast.tone };
   }, [usedGB, dailyGB, now]);
 
   const applyTheme = value => { setTheme(value); document.documentElement.setAttribute('data-theme', value); };

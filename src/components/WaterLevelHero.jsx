@@ -2,6 +2,7 @@ import React, { useId, useMemo } from 'react';
 import { Edit3 } from 'lucide-react';
 import { forecastUsage } from '../services/usageForecast';
 import { DOLPHIN_BODY_PATH, DOLPHIN_FIN_PATH } from '../utils/dolphinShape';
+import { describePlan } from '../utils/planName';
 import './WaterLevelHero.css';
 
 // Water and accent colours per status live in WaterLevelHero.css so each theme can tune its contrast.
@@ -27,6 +28,8 @@ const speedIntensity = bytesPerSecond => {
 };
 
 const formatGB = value => (value >= 100 ? value.toFixed(0) : value >= 10 ? value.toFixed(1) : value.toFixed(2));
+// Plan terms are round figures ("2GB", "3Mbps"), so drop trailing zeros.
+const formatPlanFigure = value => String(Math.round(value * 100) / 100);
 const formatShortDate = date => `${date.getMonth() + 1}/${date.getDate()}`;
 const formatLongDate = date => new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }).format(date);
 
@@ -108,19 +111,29 @@ function BurnChart({ forecast, accent }) {
 export default function WaterLevelHero({ profile, dailyGB = {}, usedGB, downloadSpeed = 0, uploadSpeed = 0, onOpenCalibration, now }) {
   const limitGB = Number(profile?.monthlyLimitGB) || 100;
   const resetDay = profile?.resetDay || 1;
+  const plan = useMemo(() => ({
+    afterLimit: profile?.afterLimit,
+    dailyBonusGB: profile?.dailyBonusGB,
+    throttleMbps: profile?.throttleMbps
+  }), [profile?.afterLimit, profile?.dailyBonusGB, profile?.throttleMbps]);
   const forecast = useMemo(
-    () => forecastUsage({ usedGB, limitGB, resetDay, dailyGB, now: now || new Date() }),
-    [usedGB, limitGB, resetDay, dailyGB, now]
+    () => forecastUsage({ usedGB, limitGB, resetDay, dailyGB, now: now || new Date(), plan }),
+    [usedGB, limitGB, resetDay, dailyGB, now, plan]
   );
+  const throttled = forecast.afterLimit === 'throttled';
+  const slowSpeed = forecast.throttleMbps > 0 ? `${formatPlanFigure(forecast.throttleMbps)}Mbps` : '느린 속도';
+  const afterBase = forecast.dailyBonusGB > 0 ? `매일 ${formatPlanFigure(forecast.dailyBonusGB)}GB + ${slowSpeed}` : slowSpeed;
   const clipId = useId();
   const gradientId = useId();
   const glassId = useId();
 
+  // A throttled plan keeps working after its monthly data, so its tank keeps a shallow layer.
   const remainingRatio = limitGB > 0 ? forecast.remainingGB / limitGB : 0;
+  const visibleRatio = forecast.status === 'throttled' ? 0.03 : remainingRatio;
   const intensity = speedIntensity((Number(downloadSpeed) || 0) + (Number(uploadSpeed) || 0));
   // Keep a visible sliver of water until the plan is truly empty.
   // A full plan still leaves headroom above the surface so the dolphin stays inside the porthole.
-  const levelY = remainingRatio <= 0 ? TANK_SIZE + 4 : 30 + (1 - Math.max(0.03, remainingRatio)) * (TANK_SIZE - 36);
+  const levelY = visibleRatio <= 0 ? TANK_SIZE + 4 : 30 + (1 - Math.max(0.03, visibleRatio)) * (TANK_SIZE - 36);
   const amplitude = 1.6 + intensity * 5.5;
   const bubbleCount = Math.round(intensity * BUBBLES.length);
 
@@ -129,9 +142,15 @@ export default function WaterLevelHero({ profile, dailyGB = {}, usedGB, download
 
   let headline;
   let sub;
-  if (forecast.status === 'exhausted') {
+  if (forecast.status === 'throttled') {
+    headline = <>기본 데이터를 다 써서 <em>{afterBase}</em>로 쓰는 중이에요</>;
+    sub = `${formatLongDate(forecast.end)} 리셋까지 ${Math.ceil(forecast.remainingDays)}일 · 느려도 계속 쓸 수 있어요`;
+  } else if (forecast.status === 'exhausted') {
     headline = <>이번 달 데이터를 <em>모두 썼어요</em></>;
     sub = `${formatLongDate(forecast.end)} 리셋까지 ${Math.ceil(forecast.remainingDays)}일 남았어요.`;
+  } else if (forecast.status === 'over' && throttled) {
+    headline = <>이 속도면 <em>{formatLongDate(forecast.depletionDate)}</em>부터 {afterBase}로 써요</>;
+    sub = `리셋보다 ${daysShort}일 빨라요 · 하루 평균 ${formatGB(forecast.dailyPaceGB)} GB 사용 중`;
   } else if (forecast.status === 'over') {
     headline = <>이 속도면 <em>{formatLongDate(forecast.depletionDate)}</em>에 바닥나요</>;
     sub = `리셋보다 ${daysShort}일 빨라요 · 하루 평균 ${formatGB(forecast.dailyPaceGB)} GB 사용 중`;
@@ -147,12 +166,20 @@ export default function WaterLevelHero({ profile, dailyGB = {}, usedGB, download
   }
 
   const todayRatio = forecast.todayBudgetGB > 0 ? Math.min(1, forecast.todayUsedGB / forecast.todayBudgetGB) : 1;
-  const todayMessage = forecast.todayLeftGB >= 0
-    ? <>오늘 <b>{formatGB(forecast.todayLeftGB)} GB</b> 더 써도 괜찮아요</>
-    : <>오늘 권장량보다 <b>{formatGB(-forecast.todayLeftGB)} GB</b> 더 썼어요</>;
+  let todayMessage;
+  if (forecast.status === 'throttled') {
+    todayMessage = forecast.todayLeftGB > 0
+      ? <>오늘 매일 데이터 <b>{formatGB(forecast.todayLeftGB)} GB</b> 남았어요</>
+      : <>오늘 매일 데이터를 다 써서 <b>{slowSpeed}</b>로 쓰는 중이에요</>;
+  } else {
+    todayMessage = forecast.todayLeftGB >= 0
+      ? <>오늘 <b>{formatGB(forecast.todayLeftGB)} GB</b> 더 써도 괜찮아요</>
+      : <>오늘 권장량보다 <b>{formatGB(-forecast.todayLeftGB)} GB</b> 더 썼어요</>;
+  }
+  const showToday = forecast.status !== 'exhausted' && !(forecast.status === 'throttled' && forecast.dailyBonusGB <= 0);
 
   return (
-    <section className="glass-card water-hero" data-status={forecast.status} style={{ '--wave-period': `${7 - intensity * 4}s` }}>
+    <section className="glass-card water-hero" data-tone={forecast.tone} style={{ '--wave-period': `${7 - intensity * 4}s` }}>
       <div
         className="water-hero__tank"
         role="img"
@@ -196,7 +223,7 @@ export default function WaterLevelHero({ profile, dailyGB = {}, usedGB, download
                 <path className="water-hero__wave" d={wavePath(amplitude * 0.8)} style={{ fill: 'var(--water-top)' }} transform="translate(-25 3)" />
               </g>
               {/* Drawn between the wave layers so the front wave covers its belly: it swims rather than floats */}
-              {remainingRatio > 0 && (
+              {visibleRatio > 0 && (
                 <g transform="translate(98 -9) rotate(-8) scale(0.56)">
                   <Dolphin />
                 </g>
@@ -225,14 +252,14 @@ export default function WaterLevelHero({ profile, dailyGB = {}, usedGB, download
         {/* Above the waterline the readout sits on the card background, so it follows the theme's text colour */}
         <div className={`water-hero__readout${levelY > 92 ? ' water-hero__readout--dry' : ''}`}>
           <span className="water-hero__percent">{remainingPercent.toFixed(0)}<small>%</small></span>
-          <span className="water-hero__percent-label">남음</span>
+          <span className="water-hero__percent-label">{forecast.status === 'throttled' ? '속도 제한' : '남음'}</span>
         </div>
       </div>
 
       <div className="water-hero__body">
         <div className="water-hero__eyebrow">
           <b>{profile?.name || '데이터 요금제'}</b>
-          <span>월 {limitGB} GB · 매월 {resetDay}일 리셋</span>
+          <span>{describePlan({ ...plan, monthlyLimitGB: limitGB })} · 매월 {resetDay}일 리셋</span>
           {onOpenCalibration && (
             <button type="button" className="water-hero__edit" onClick={onOpenCalibration} aria-label="요금제 정보와 사용량 보정">
               <Edit3 size={13} />
@@ -251,14 +278,14 @@ export default function WaterLevelHero({ profile, dailyGB = {}, usedGB, download
           <p className="water-hero__sub">{sub}</p>
         </div>
 
-        {forecast.status !== 'exhausted' && (
+        {showToday && (
           <div className="water-hero__today">
             <div className="water-hero__today-row">
               <span>{todayMessage}</span>
               <span>오늘 {formatGB(forecast.todayUsedGB)} / {formatGB(forecast.todayBudgetGB)} GB</span>
             </div>
             <div className="water-hero__meter" aria-hidden="true">
-              <div style={{ width: `${todayRatio * 100}%`, background: forecast.todayLeftGB < 0 ? 'var(--accent-rose)' : undefined }} />
+              <div style={{ width: `${todayRatio * 100}%`, background: forecast.todayLeftGB < 0 && !throttled ? 'var(--accent-rose)' : undefined }} />
             </div>
           </div>
         )}

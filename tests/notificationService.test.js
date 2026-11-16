@@ -40,3 +40,13 @@ test('dropping below 75% re-arms the alerts', () => {
   checkAndNotifyThresholds(85, 100, '테스트', 'rearm', {}, notify);
   assert.equal(sent.length, 2);
 });
+
+test('throttled plans explain what happens next instead of warning about blocking', () => {
+  const sent = [];
+  const notify = (title, body) => sent.push({ title, body });
+  checkAndNotifyThresholds(10.6, 11, 'A 스페셜', 'throttled', {}, notify, { afterLimit: 'throttled', dailyBonusGB: 2, throttleMbps: 3 });
+  assert.equal(sent.length, 1);
+  assert.match(sent[0].title, /기본 데이터 거의 소진/);
+  assert.match(sent[0].body, /매일 2GB \+ 3Mbps로 계속 쓸 수 있어요/);
+  assert.doesNotMatch(sent[0].body, /차단|추가 요금/);
+});

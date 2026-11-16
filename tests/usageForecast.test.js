@@ -54,3 +54,24 @@ test('burn-down series ends at the real total even with a calibrated baseline', 
   });
   assert.deepEqual(result.series.map(point => point.cumulativeGB), [16, 19, 20]);
 });
+
+test('a throttled plan that runs out slows down instead of being exhausted', () => {
+  const plan = { afterLimit: 'throttled', dailyBonusGB: 2, throttleMbps: 3 };
+  const now = local(2026, 10, 25, 15);
+  const result = forecastUsage({ usedGB: 12, limitGB: 11, resetDay: 1, now, dailyGB: { '2026-10-25': 0.5 }, plan });
+  assert.equal(result.status, 'throttled');
+  assert.equal(result.tone, 'tight');
+  // After the monthly data is gone, today's full-speed allowance is the daily top-up.
+  assert.equal(result.todayBudgetGB, 2);
+  assert.equal(result.todayLeftGB, 1.5);
+  assert.equal(result.throttleMbps, 3);
+});
+
+test('a throttled plan heading past its data stays in the warning tone, a hard cap goes red', () => {
+  const now = local(2026, 10, 11, 0);
+  const throttled = forecastUsage({ usedGB: 50, limitGB: 100, resetDay: 1, now, plan: { afterLimit: 'throttled', throttleMbps: 5 } });
+  assert.deepEqual([throttled.status, throttled.tone], ['over', 'tight']);
+  const blocked = forecastUsage({ usedGB: 50, limitGB: 100, resetDay: 1, now });
+  assert.deepEqual([blocked.status, blocked.tone], ['over', 'danger']);
+  assert.equal(forecastUsage({ usedGB: 120, limitGB: 100, resetDay: 1, now }).tone, 'danger');
+});

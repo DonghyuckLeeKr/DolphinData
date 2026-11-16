@@ -20,7 +20,9 @@ export const getBillingWindow = (resetDay = 1, now = new Date()) => {
   return { start, end };
 };
 
-export const forecastUsage = ({ usedGB = 0, limitGB = 0, resetDay = 1, dailyGB = {}, now = new Date() } = {}) => {
+// `plan` describes what happens after the monthly data: a daily top-up and/or a speed-capped
+// unlimited tail ('throttled') or a hard stop ('blocked', the default).
+export const forecastUsage = ({ usedGB = 0, limitGB = 0, resetDay = 1, dailyGB = {}, now = new Date(), plan = {} } = {}) => {
   const used = Math.max(0, Number(usedGB) || 0);
   const limit = Math.max(0, Number(limitGB) || 0);
   const { start, end } = getBillingWindow(resetDay, now);
@@ -35,8 +37,17 @@ export const forecastUsage = ({ usedGB = 0, limitGB = 0, resetDay = 1, dailyGB =
   const projectedTotalGB = used + dailyPaceGB * remainingDays;
   const remainingGB = Math.max(0, limit - used);
 
+  const afterLimit = plan.afterLimit === 'throttled' ? 'throttled' : 'blocked';
+  const dailyBonusGB = Math.max(0, Number(plan.dailyBonusGB) || 0);
+  const throttleMbps = Math.max(0, Number(plan.throttleMbps) || 0);
+  const baseExhausted = limit > 0 && used >= limit;
+
   const todayUsedGB = Math.max(0, Number(dailyGB[getTodayKey(now)]) || 0);
-  const todayBudgetGB = limit > 0 ? (remainingGB + todayUsedGB) / daysLeftIncludingToday : 0;
+  // Once the monthly data is gone, the daily top-up is today's whole full-speed allowance.
+  // Today's usage may include some monthly data spent before it ran out, so this errs low.
+  const todayBudgetGB = baseExhausted
+    ? dailyBonusGB
+    : limit > 0 ? (remainingGB + todayUsedGB) / daysLeftIncludingToday : 0;
   const todayLeftGB = todayBudgetGB - todayUsedGB;
 
   let depletionDate = null;
@@ -46,9 +57,13 @@ export const forecastUsage = ({ usedGB = 0, limitGB = 0, resetDay = 1, dailyGB =
   }
 
   let status = 'safe';
-  if (limit > 0 && used >= limit) status = 'exhausted';
+  if (baseExhausted) status = afterLimit === 'throttled' ? 'throttled' : 'exhausted';
   else if (limit > 0 && projectedTotalGB > limit) status = 'over';
   else if (limit > 0 && projectedTotalGB > limit * 0.9) status = 'tight';
+  // A plan that only slows down never cuts the user off, so it never reaches the danger tone.
+  const tone = status === 'safe' ? 'safe'
+    : afterLimit === 'throttled' || status === 'tight' ? 'tight'
+      : 'danger';
 
   // Cumulative series from period start to today. Calibrated baselines have no daily entry,
   // so the gap between history and the real total is attributed to the first day.
@@ -66,7 +81,8 @@ export const forecastUsage = ({ usedGB = 0, limitGB = 0, resetDay = 1, dailyGB =
   return {
     start, end, totalDays, elapsedDays, remainingDays, daysLeftIncludingToday,
     usedGB: used, limitGB: limit, remainingGB, percentUsed: limit > 0 ? Math.min(100, (used / limit) * 100) : 0,
-    dailyPaceGB, projectedTotalGB, depletionDate, status,
+    dailyPaceGB, projectedTotalGB, depletionDate, status, tone,
+    afterLimit, dailyBonusGB, throttleMbps,
     todayUsedGB, todayBudgetGB, todayLeftGB, series
   };
 };

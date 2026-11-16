@@ -25,14 +25,13 @@
   margin-bottom: 18px;
 }
 
-.water-hero[data-status="tight"] {
+.water-hero[data-tone="tight"] {
   --water-top: #fcd34d;
   --water-bottom: #b45309;
   --hero-accent: var(--accent-amber);
 }
 
-.water-hero[data-status="over"],
-.water-hero[data-status="exhausted"] {
+.water-hero[data-tone="danger"] {
   --water-top: #fb7185;
   --water-bottom: #9f1239;
   --hero-accent: var(--accent-rose);
@@ -56,14 +55,13 @@
   --hero-accent: #0662d8;
 }
 
-[data-theme="nordic-light"] .water-hero[data-status="tight"] {
+[data-theme="nordic-light"] .water-hero[data-tone="tight"] {
   --water-top: #f59e0b;
   --water-bottom: #92400e;
   --hero-accent: #b45309;
 }
 
-[data-theme="nordic-light"] .water-hero[data-status="over"],
-[data-theme="nordic-light"] .water-hero[data-status="exhausted"] {
+[data-theme="nordic-light"] .water-hero[data-tone="danger"] {
   --water-top: #f43f5e;
   --water-bottom: #881337;
   --hero-accent: #be123c;

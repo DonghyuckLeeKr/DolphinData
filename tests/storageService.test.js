@@ -241,3 +241,12 @@ test('simple mode keeps only the speed card while detailed mode honours hidden c
   const detailed = makeConfig({ hiddenCards: ['processes'] });
   assert.deepEqual(['traffic', 'speed', 'ping', 'processes'].filter(card => isDashboardCardVisible(detailed, card)), ['traffic', 'speed', 'ping']);
 });
+
+test('plan structure fields default to a hard cap and reject bad values', () => {
+  const defaults = makeConfig().profiles[0];
+  assert.deepEqual([defaults.dailyBonusGB, defaults.afterLimit, defaults.throttleMbps], [0, 'blocked', 0]);
+  const plan = makeConfig({ profiles: [{ id: 'profile-1', name: 'A 스페셜 11GB+', monthlyLimitGB: 11, dailyBonusGB: 2, afterLimit: 'throttled', throttleMbps: 3 }] }).profiles[0];
+  assert.deepEqual([plan.dailyBonusGB, plan.afterLimit, plan.throttleMbps], [2, 'throttled', 3]);
+  const bad = makeConfig({ profiles: [{ id: 'profile-1', dailyBonusGB: -5, afterLimit: 'free', throttleMbps: 'fast' }] }).profiles[0];
+  assert.deepEqual([bad.dailyBonusGB, bad.afterLimit, bad.throttleMbps], [0, 'blocked', 0]);
+});
