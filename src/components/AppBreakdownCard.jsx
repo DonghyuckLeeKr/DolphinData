@@ -1,11 +1,36 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ArrowDown, ArrowUp, CheckCircle2, Cpu, MemoryStick, RefreshCw, TriangleAlert, XCircle } from 'lucide-react';
-import { fetchTopProcesses, terminateProcess } from '../services/networkTelemetry';
+import { ArrowDown, ArrowUp, CheckCircle2, Cpu, MemoryStick, RefreshCw, ShieldCheck, TriangleAlert, XCircle } from 'lucide-react';
+import { fetchTopProcesses, isRunningAsAdmin, isTauriAvailable, terminateProcess } from '../services/networkTelemetry';
 import { formatBytes } from '../utils/formatters';
 import { resolveProcessSortMode, sortProcessesForDisplay } from '../utils/processDisplay';
 
-export default function AppBreakdownCard() {
+export default function AppBreakdownCard({ onRunAsAdmin }) {
   const [processes, setProcesses] = useState([]);
+  const [runningAsAdmin, setRunningAsAdmin] = useState(false);
+  const [relaunching, setRelaunching] = useState(false);
+  const [relaunchError, setRelaunchError] = useState('');
+
+  useEffect(() => {
+    let mounted = true;
+    isRunningAsAdmin()
+      .then(elevated => { if (mounted) setRunningAsAdmin(Boolean(elevated)); })
+      .catch(() => {});
+    return () => { mounted = false; };
+  }, []);
+
+  // Offer the relaunch right where the missing data is, instead of sending users to settings.
+  const handleRelaunch = async () => {
+    if (!onRunAsAdmin || relaunching) return;
+    setRelaunchError('');
+    setRelaunching(true);
+    try {
+      await onRunAsAdmin();
+    } catch (error) {
+      setRelaunchError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setRelaunching(false);
+    }
+  };
   const [source, setSource] = useState('starting');
   const [collectionError, setCollectionError] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -104,9 +129,22 @@ export default function AppBreakdownCard() {
           <div style={{ fontWeight: '700' }}>
             {collectionError || '프로그램별 데이터 사용량은 관리자 권한에서만 볼 수 있습니다.'}
           </div>
-          <div style={{ marginTop: '4px', color: 'var(--text-muted)', lineHeight: '1.45' }}>
-            환경 설정 → 일반 → '관리자 권한으로 다시 실행'을 누르면 바로 볼 수 있습니다.
-          </div>
+          {!runningAsAdmin && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginTop: '8px' }}>
+              <button
+                type="button"
+                className="glass-btn"
+                onClick={handleRelaunch}
+                disabled={!onRunAsAdmin || !isTauriAvailable() || relaunching}
+                style={{ padding: '6px 12px', fontSize: '0.76rem', color: 'var(--text-main)', cursor: relaunching ? 'default' : 'pointer' }}
+              >
+                <ShieldCheck size={14} />
+                <span>{relaunching ? 'Windows 권한 확인 대기 중…' : '관리자 권한으로 다시 실행'}</span>
+              </button>
+              <span style={{ color: 'var(--text-muted)', lineHeight: '1.45' }}>Windows에서 허용하면 앱이 다시 열리고 바로 보입니다.</span>
+            </div>
+          )}
+          {relaunchError && <div role="alert" style={{ marginTop: '6px', color: 'var(--accent-rose)' }}>{relaunchError}</div>}
         </div>
       )}
 

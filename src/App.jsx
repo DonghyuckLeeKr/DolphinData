@@ -634,7 +634,7 @@ export default function App() {
             traffic: <TrafficTimeSeriesChart historyData={historyData} unitMode={config.unitMode} profile={activeNetworkBinding} />,
             speed: <LiveSpeedCard telemetry={telemetry} unitMode={config.unitMode} />,
             ping: <PingTestCard profile={activeNetworkBinding} />,
-            processes: <AppBreakdownCard />
+            processes: <AppBreakdownCard onRunAsAdmin={() => handleRunAsAdmin({ configUpdates: {} })} />
           };
           return (
             <div style={{
