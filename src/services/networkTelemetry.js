@@ -193,7 +193,7 @@ export const fetchTopProcesses = async () => {
 
   return {
     source: 'unavailable',
-    error: '프로세스별 네트워크 사용량은 Windows 데스크톱 앱에서 표시됩니다.',
+    error: '프로그램별 데이터 사용량은 Windows 앱에서만 볼 수 있습니다.',
     processes: []
   };
 };

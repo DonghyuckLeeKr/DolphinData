@@ -107,10 +107,10 @@ function DailyHistoryModal({ config, activeProfile, onClose }) {
           </div>
           <div>
             <h2 id={titleId} style={{ fontSize: '1.15rem', fontWeight: '700', color: 'var(--text-main)' }}>
-              일별 데이터 소비 캘린더 & 통계
+              최근 14일 사용량
             </h2>
             <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              최근 14일간의 일별 데이터 사용량 추이를 확인합니다.
+              하루하루 얼마나 썼는지 보여 줍니다.
             </p>
           </div>
         </div>
@@ -125,14 +125,14 @@ function DailyHistoryModal({ config, activeProfile, onClose }) {
           </div>
 
           <div className="glass-card" style={{ padding: '10px 14px' }}>
-            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block' }}>일평균 사용량</span>
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block' }}>하루 평균</span>
             <span style={{ fontSize: '1.1rem', fontWeight: '800', color: 'var(--accent-blue)' }}>
               {avgDailyGB.toFixed(2)} <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>GB/일</span>
             </span>
           </div>
 
           <div className="glass-card" style={{ padding: '10px 14px' }}>
-            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block' }}>최대 소비일 ({maxDay.label})</span>
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block' }}>가장 많이 쓴 날 ({maxDay.label})</span>
             <span style={{ fontSize: '1.1rem', fontWeight: '800', color: 'var(--accent-rose)' }}>
               {maxDay.gb.toFixed(2)} <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>GB</span>
             </span>
@@ -142,7 +142,7 @@ function DailyHistoryModal({ config, activeProfile, onClose }) {
         {/* View Mode Toggle */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
           <span style={{ fontSize: '0.82rem', fontWeight: '700', color: 'var(--text-main)' }}>
-            최근 14일 소비 추이
+            날짜별 사용량
           </span>
           <div style={{ display: 'flex', gap: '4px' }}>
             <button

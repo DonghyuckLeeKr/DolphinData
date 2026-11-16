@@ -73,10 +73,10 @@ export const getCurrentPeriod = () => getBillingPeriod(1);
 
 // Secondary dashboard cards the user may hide. The water-level hero and network prompts always stay.
 export const DASHBOARD_CARDS = [
-  { id: 'traffic', label: '실시간 트래픽 추이', simple: false },
-  { id: 'speed', label: '실시간 전송 속도', simple: true },
-  { id: 'ping', label: '네트워크 지연시간 (Ping)', simple: false },
-  { id: 'processes', label: '활성 프로세스 리소스', simple: false }
+  { id: 'traffic', label: '최근 1분 속도', simple: false },
+  { id: 'speed', label: '지금 속도', simple: true },
+  { id: 'ping', label: '응답 속도 (Ping)', simple: false },
+  { id: 'processes', label: '실행 중인 프로그램', simple: false }
 ];
 
 export const isDashboardCardVisible = (config, cardId) => {

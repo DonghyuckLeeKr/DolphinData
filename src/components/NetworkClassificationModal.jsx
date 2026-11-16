@@ -131,7 +131,7 @@ function NetworkClassificationModal({ binding, profiles, onSave, onClose, onSave
         <div style={{ padding: '11px 13px', borderRadius: '11px', background: 'var(--glass-card)', border: '1px solid var(--glass-border-light)' }}>
           <b style={{ color: 'var(--text-main)', fontSize: '0.86rem' }}>{binding.networkName || '알 수 없는 네트워크'}</b>
           <span style={{ color: 'var(--accent-blue)', fontSize: '0.72rem', marginLeft: '8px' }}>{display.label}</span>
-          <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem', marginTop: '3px' }}>물리 어댑터: {binding.interfaceName || '확인 중'}</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem', marginTop: '3px' }}>어댑터: {binding.interfaceName || '확인 중'}</div>
         </div>
 
         <fieldset style={{ border: 0, padding: 0, margin: 0, display: 'grid', gap: '8px' }}>
@@ -166,7 +166,7 @@ function NetworkClassificationModal({ binding, profiles, onSave, onClose, onSave
           <button type="button" onClick={onClose} className="glass-btn" style={{ cursor: 'pointer', minHeight: '44px' }}>나중에</button>
           <button type="submit" className="glass-btn glass-btn-primary" style={{ cursor: 'pointer', minHeight: '44px' }}>
             <Check size={16} />
-            <span>이대로 사용</span>
+            <span>저장</span>
           </button>
         </div>
       </form>

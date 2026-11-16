@@ -60,13 +60,13 @@ export default function MiniGadget({ config, telemetry, onExpand, onOpenCalibrat
 
   if (isMetered && percentage >= 90) {
     statusColor = 'var(--accent-rose)';
-    levelText = '소진 임박';
+    levelText = '곧 소진';
   } else if (isMetered && percentage >= 80) {
     statusColor = 'var(--accent-amber)';
-    levelText = '절약 모드';
+    levelText = '아껴 쓰기';
   } else if (isMetered && percentage >= 40) {
     statusColor = 'var(--accent-blue)';
-    levelText = '순항 중';
+    levelText = '여유';
   }
 
   return (
@@ -143,7 +143,7 @@ export default function MiniGadget({ config, telemetry, onExpand, onOpenCalibrat
             onMouseDown={(e) => e.stopPropagation()}
             type="button"
             style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '3px', borderRadius: '4px' }}
-            title="메인 대시보드로 복원"
+            title="큰 창으로 보기"
           >
             <Maximize2 size={13} />
           </button>

@@ -16,7 +16,7 @@ export default function LiveSpeedCard({ telemetry, unitMode }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
         <h3 style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
           <Activity size={18} color="var(--accent-blue)" />
-          실시간 순간 전송 속도
+          지금 속도
         </h3>
         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
           단위: {unitMode === 'Mbps' ? 'Mbps' : 'MB/s'}

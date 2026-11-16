@@ -34,7 +34,7 @@ export default function QuickStatsStrip({ telemetry, config, activeProfile, netw
           <ArrowDown size={18} />
         </div>
         <div>
-          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>세션 다운로드</span>
+          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>부팅 후 다운로드</span>
           <span style={{ fontSize: '1.1rem', fontWeight: '700', color: 'var(--text-main)' }}>
             {formatBytes(totalDownBytes)}
           </span>
@@ -58,7 +58,7 @@ export default function QuickStatsStrip({ telemetry, config, activeProfile, netw
           <ArrowUp size={18} />
         </div>
         <div>
-          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>세션 업로드</span>
+          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>부팅 후 업로드</span>
           <span style={{ fontSize: '1.1rem', fontWeight: '700', color: 'var(--text-main)' }}>
             {formatBytes(totalUpBytes)}
           </span>
